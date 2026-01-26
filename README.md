@@ -10,7 +10,7 @@ The **Coral Shading Protocol (CSP)** tool is designed to help practitioners plan
 The tool contrasts **Constant Shading** (standard shade cloth/mesh) with **Dynamic Shading** (active management during peak solar irradiance) to identify the most effective strategy for minimizing stress while maximizing growth.
 
 ## 🔗 Live Demo
-[**Click here to use the tool online**](https://yourusername.github.io/repo-name)  
+[**Click here to use the tool online**](https://grahamhp.github.io/coral-shading-protocol/) 
 *(Replace the link above once you activate GitHub Pages)*
 
 ## ✨ Key Features
