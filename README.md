@@ -1,7 +1,7 @@
 # Coral Shading Protocol (CSP)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-6.0-blue.svg)](https://github.com/yourusername/repo-name)
+[![Version](https://img.shields.io/badge/version-3.2-blue.svg)](https://github.com/yourusername/repo-name)
 
 **A web-based modeling tool for designing shading regimes for coral conservation, restoration, and photobiology experiments.**
 
@@ -10,7 +10,7 @@ The **Coral Shading Protocol (CSP)** tool is designed to help practitioners plan
 The tool contrasts **Constant Shading** (standard shade cloth/mesh) with **Dynamic Shading** (active management during peak solar irradiance) to identify the most effective strategy for minimizing stress while maximizing growth.
 
 ## 🔗 Live Demo
-[**Click here to use the tool online**](https://grahamhp.github.io/coral-shading-protocol/) 
+[**Click here to use the tool online**](https://grahamhp.github.io/coral-shading-protocol/)  
 *(Replace the link above once you activate GitHub Pages)*
 
 ## ✨ Key Features
@@ -71,7 +71,7 @@ Contributions are welcome! If you have suggestions for improving the physics mod
 
 If you use this tool for research, conservation planning, or restoration projects, please cite it as:
 
-> **Patterson, G.** (2026). *Coral Shading Protocol (CSP) Web Application v3.2*. REEF Scuba.
+> **Patterson, Graham** (2026). *Coral Shading Protocol (CSP) Web Application v3.2*. REEF Scuba.
 
 ## 👤 Author
 
