@@ -7,11 +7,10 @@
 
 The **Coral Shading Protocol (CSP)** tool is designed to help practitioners plan effective light management strategies for coral nurseries, outplanting sites, and experimental tanks. It allows users to model underwater light fields based on site-specific data, calculating Daily Light Integrals (DLI) and categorizing energy into biological growth zones based on species-specific photophysiology.
 
-The tool contrasts **Constant Shading** (standard shade cloth/mesh) with **Dynamic Shading** (active management during peak solar irradiance) to identify the most effective strategy for minimizing stress while maximizing growth.
+The tool contrasts **Constant Shading** (standard shade cloth/mesh) with **Dynamic Shading** (active management or sized 100% opaque shading to affect peak solar irradiance) to identify the most effective strategy for minimizing stress while supporting energy budget.
 
 ## 🔗 Live Demo
-[**Click here to use the tool online**](https://grahamhp.github.io/coral-shading-protocol/)  
-*(Replace the link above once you activate GitHub Pages)*
+[**Click here to use the tool online**](https://grahamhp.github.io/coral-shading-protocol/)
 
 ## ✨ Key Features
 
@@ -34,7 +33,7 @@ Gather hourly average irradiance data for your restoration or study site. We rec
 
 ### 2. Physical Parameters
 * **Surface Reflection:** Enable if using satellite/weather station data ("In-Air"). Disable if using underwater sensor data.
-* **Target Reduction:** Set your conservation goal (e.g., "Reduce total DLI by 30% to mitigate bleaching risk"). The tool solves for the shading duration required to meet this target.
+* **Target Reduction:** Set your conservation goal (e.g., "Reduce total DLI by 30% to mitigate bleaching risk").
 * **Depth & Attenuation:** Input the depth of your nursery/site and the water turbidity ($K_d$).
 
 ### 3. Biological Parameters
@@ -71,7 +70,7 @@ Contributions are welcome! If you have suggestions for improving the physics mod
 
 If you use this tool for research, conservation planning, or restoration projects, please cite it as:
 
-> **Patterson, Graham** (2026). *Coral Shading Protocol (CSP) Web Application v3.2*. REEF Scuba.
+> **Patterson, Graham** (2026). *Coral Shading Protocol (CSP) Web Application v3.2*. REEF Scuba. Available at: https://grahamhp.github.io/coral-shading-protocol/
 
 ## 👤 Author
 
