@@ -71,7 +71,7 @@ Contributions are welcome! If you have suggestions for improving the physics mod
 
 If you use this tool for research, conservation planning, or restoration projects, please cite it as:
 
-> **Patterson, G.** (2026). *Coral Shading Protocol (CSP) Web Application v6.0*. REEF Scuba.
+> **Patterson, G.** (2026). *Coral Shading Protocol (CSP) Web Application v3.2*. REEF Scuba.
 
 ## 👤 Author
 
