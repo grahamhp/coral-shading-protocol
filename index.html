@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Coral Shading Protocol</title>
+    <title>Coral Shading Protocol v4.0</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.4.0/dist/chartjs-plugin-annotation.min.js"></script>
     <style>
@@ -14,6 +14,9 @@
             --bg: #f4f7f6;
             --panel-bg: #ffffff;
             --text: #2d3436;
+            
+            --col-a: #0077b6; /* Method A Color */
+            --col-b: #ea580c; /* Method B Color */
         }
 
         body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 20px; background-color: var(--bg); color: var(--text); }
@@ -21,7 +24,7 @@
         /* --- LAYOUT GRID --- */
         .main-layout {
             display: grid;
-            grid-template-columns: 340px 1fr; /* Sidebar fixed width, Content fills rest */
+            grid-template-columns: 380px 1fr;
             gap: 20px;
             align-items: start;
             margin-top: 10px;
@@ -37,10 +40,25 @@
         /* --- INPUTS & CONTROLS --- */
         label { display: flex; justify-content: space-between; align-items: center; margin: 12px 0 5px; font-size: 0.9em; font-weight: 600; color: #444; }
         input[type="range"] { width: 100%; margin: 5px 0 15px; cursor: pointer; accent-color: var(--primary); }
-        input[type="number"].param-input { width: 50px; padding: 5px; border: 1px solid #ccc; border-radius: 4px; text-align: center;}
+        input[type="number"].param-input { width: 60px; padding: 5px; border: 1px solid #ccc; border-radius: 4px; text-align: center; font-size:0.9em;}
+        input[type="text"].name-input { width: 100%; padding: 5px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 10px; font-size: 0.9em; }
         
+        .scenario-box {
+            background: #fdfdfd;
+            border: 1px solid #eee;
+            border-left: 4px solid #ccc;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 0 6px 6px 0;
+        }
+        
+        .scenario-a { border-left-color: var(--col-a); }
+        .scenario-b { border-left-color: var(--col-b); }
+        
+        .scenario-title { font-weight: bold; margin-bottom: 10px; display: block; color: #555; }
+
         /* Fixed Table Layout */
-        .input-scroll-container { max-height: 400px; overflow-y: auto; padding-right: 5px; border: 1px solid #eee; border-radius: 4px; background: #fafafa; }
+        .input-scroll-container { max-height: 250px; overflow-y: auto; padding-right: 5px; border: 1px solid #eee; border-radius: 4px; background: #fafafa; }
         
         .table-header { display: flex; padding-right: 20px; margin-bottom: 5px; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
         .time-col-head { flex: 0 0 60px; font-size: 0.75em; font-weight: bold; color: #888; }
@@ -53,50 +71,70 @@
         /* --- STATISTICS GRID --- */
         .stats-grid { 
             display: grid; 
-            grid-template-columns: 1fr 2fr 1fr; /* Default: Solar | Growth Zones | DLI */
+            grid-template-columns: 1fr 2fr 1fr; 
             gap: 15px; 
         }
         
-        /* Responsive break for stats */
-        @media (max-width: 1100px) {
+        @media (max-width: 1200px) {
             .stats-grid { grid-template-columns: 1fr; }
         }
 
-        .stat-card { background: #f8fcfc; padding: 15px; border-radius: 6px; border: 1px solid #e0f0f0; text-align: center; height: 100%; box-sizing: border-box; }
+        .stat-card { background: #f8fcfc; padding: 15px; border-radius: 6px; border: 1px solid #e0f0f0; text-align: center; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; justify-content: flex-start;}
         .stat-card h4 { margin: 0 0 12px; font-size: 0.8em; color: #666; text-transform: uppercase; border-bottom: 1px solid #eee; padding-bottom: 8px;}
         
         .stat-main-val { font-size: 1.4em; font-weight: bold; color: var(--primary); display: block; margin-top: 10px;}
         .stat-sub-val { font-size: 0.85em; color: #555; display: block; margin-bottom: 4px; }
-        
-        .comparison-table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
-        .comparison-table th { text-align: center; color: #888; font-weight: 600; padding-bottom: 5px; border-bottom: 1px solid #eee; font-size: 0.8em;}
-        .comparison-table td { padding: 6px 4px; border-bottom: 1px solid #f4f4f4; text-align: center; font-weight: 600; }
-        .comparison-table td:first-child { text-align: left; color: #666; font-weight: 500; width: 30%; }
+
+        /* Comparison Table */
+        .comparison-table { width: 100%; border-collapse: collapse; font-size: 0.8em; flex-grow: 1; }
+        .comparison-table th { text-align: right; color: #888; font-weight: 600; padding-bottom: 5px; border-bottom: 1px solid #eee; font-size: 0.75em;}
+        .comparison-table th:first-child { text-align: left; }
+        .comparison-table td { padding: 6px 4px; border-bottom: 1px solid #f4f4f4; text-align: right; font-weight: 500; color: #444; }
+        .comparison-table td:first-child { text-align: left; color: #666; font-weight: 600; width: 25%; }
         
         .col-none { color: #888; }
-        .col-const { color: #0077b6; } 
-        .col-dyn { color: #06d6a0; }
+        .col-a { color: var(--col-a); } 
+        .col-b { color: var(--col-b); }
 
-        /* --- TOOLTIPS --- */
+        /* Sensitivity Section */
+        .sensitivity-box { margin-top: auto; padding-top: 10px; border-top: 1px solid #eee; text-align: left; font-size: 0.8em; color: #666; }
+        .sens-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+
+        /* --- TOOLTIPS (REFRESHED) --- */
         .tooltip-container { position: relative; display: inline-block; margin-left: 5px; vertical-align: middle; }
         .info-icon { 
             width: 14px; height: 14px; background: #b0c4de; color: white; border-radius: 50%; 
             text-align: center; line-height: 14px; font-size: 10px; font-weight: bold; cursor: help; display: inline-block;
         }
+        
         .tooltip-text {
-            visibility: hidden; width: 220px; background-color: #333; color: #fff; text-align: left;
-            border-radius: 5px; padding: 8px 12px; position: absolute; z-index: 100; bottom: 135%; 
-            left: 50%; margin-left: -110px; font-size: 0.75em; line-height: 1.4; opacity: 0; transition: 0.2s;
+            visibility: hidden; width: 240px; background-color: #333; color: #fff; text-align: left;
+            border-radius: 5px; padding: 10px 12px; position: absolute; z-index: 100;
+            font-size: 0.75em; line-height: 1.4; opacity: 0; transition: 0.2s;
             box-shadow: 0 4px 10px rgba(0,0,0,0.2); pointer-events: none;
+            /* Default: Above */
+            bottom: 135%; left: 50%; transform: translateX(-50%);
         }
+
         .tooltip-text::after {
-            content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px;
-            border-width: 5px; border-style: solid; border-color: #333 transparent transparent transparent;
+            content: ""; position: absolute; left: 50%; margin-left: -5px;
+            border-width: 5px; border-style: solid; 
+            /* Default arrow points down */
+            top: 100%; border-color: #333 transparent transparent transparent;
         }
+
+        .tooltip-text.tooltip-bottom {
+            bottom: auto; top: 135%;
+        }
+        .tooltip-text.tooltip-bottom::after {
+            top: auto; bottom: 100%; 
+            border-color: transparent transparent #333 transparent;
+        }
+
         .tooltip-container:hover .tooltip-text { visibility: visible; opacity: 1; }
 
         /* --- CHART --- */
-        .chart-container { position: relative; height: 450px; width: 100%; }
+        .chart-container { position: relative; height: 500px; width: 100%; }
 
         /* --- TOGGLE --- */
         .switch { position: relative; display: inline-block; width: 34px; height: 18px; }
@@ -105,8 +143,6 @@
         .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 2px; bottom: 2px; background-color: white; transition: .4s; border-radius: 50%; }
         input:checked + .slider { background-color: var(--primary); }
         input:checked + .slider:before { transform: translateX(16px); }
-
-        .diff-pos { color: #2a9d8f; } .diff-neg { color: #e76f51; }
 
         /* --- FOOTER --- */
         footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; color: #666; font-size: 0.9em; }
@@ -124,12 +160,13 @@
             <div class="panel">
                 <h2>Parameters</h2>
                 
-                <label>
+                <!-- Global Params -->
+                 <label>
                     <div>
                         Surface Reflection
                         <div class="tooltip-container">
                             <span class="info-icon">?</span>
-                            <span class="tooltip-text">Calculates Fresnel losses. <strong>Enable if using "In-Air" data (PVGIS).</strong> Disable if using underwater sensor data.</span>
+                            <span class="tooltip-text">Models light loss at the air-water interface (Fresnel). <br><strong>ON:</strong> Use for in-air data.<br><strong>OFF:</strong> Use for underwater sensors.</span>
                         </div>
                     </div>
                     <label class="switch">
@@ -139,57 +176,67 @@
                 </label>
 
                 <label>
-                    Target DLI Reduction (%)
-                    <span id="shadingValue" style="color:var(--primary)">0</span>
-                </label>
-                <input type="range" min="0" max="100" step="1" value="0" id="shadingSlider">
-
-                <label>
                     Depth (meters)
                     <span id="depthValue" style="color:var(--primary)">0</span>
                 </label>
                 <input type="range" min="0" max="20" step="0.1" value="0" id="depthSlider">
 
-                <label>
-                    <div>
-                        Diffuse Transmittance
-                        <div class="tooltip-container">
-                            <span class="info-icon">?</span>
-                            <span class="tooltip-text">Percentage of ambient diffuse light that <strong>passes through</strong> the shade. 90% implies a very transparent/high shade.</span>
-                        </div>
-                    </div>
-                    <span id="diffuseShadedValue" style="color:var(--primary)">90</span>
+                <label style="margin:0 0 4px; font-size:0.8em">
+                    Kd (Atten)
+                    <div class="tooltip-container"><span class="info-icon">?</span><span class="tooltip-text"><strong>Diffuse Attenuation Coefficient:</strong> <br>Clear reef water: 0.05 - 0.15.</span></div>
                 </label>
-                <input type="range" min="0" max="100" step="1" value="90" id="diffuseShadedSlider">
-                <div style="font-size:0.75em; color:#888; margin-top:-10px; text-align:right;">(% Passing Through)</div>
+                <input type="number" id="kInput" class="param-input" value="0.09" step="0.01" style="width:100%; margin-bottom:15px;">
 
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:20px;">
+                <!-- Scenario A -->
+                <div class="scenario-box scenario-a">
+                    <span class="scenario-title" style="color:var(--col-a)">Method A</span>
+                    <input type="text" id="nameA" class="name-input" value="High Shade">
+                    
+                    <label>
+                        Target Reduction (%)
+                        <span id="valRedA" style="color:var(--col-a)">50</span>
+                    </label>
+                    <input type="range" min="0" max="100" step="1" value="50" id="sliderRedA">
+                    
+                    <label>
+                        Transmittance (%)
+                        <span id="valTransA" style="color:var(--col-a)">10</span>
+                    </label>
+                    <input type="range" min="0" max="100" step="1" value="10" id="sliderTransA">
+                    <div style="font-size:0.7em;color:#999; text-align:right; margin-top:-10px;">(Material Clarity)</div>
+                </div>
+
+                <!-- Scenario B -->
+                <div class="scenario-box scenario-b">
+                     <span class="scenario-title" style="color:var(--col-b)">Method B</span>
+                     <input type="text" id="nameB" class="name-input" value="Low Shade">
+                     
+                     <label>
+                         Target Reduction (%)
+                         <span id="valRedB" style="color:var(--col-b)">20</span>
+                     </label>
+                     <input type="range" min="0" max="100" step="1" value="20" id="sliderRedB">
+                     
+                     <label>
+                         Transmittance (%)
+                         <span id="valTransB" style="color:var(--col-b)">80</span>
+                     </label>
+                     <input type="range" min="0" max="100" step="1" value="80" id="sliderTransB">
+                     <div style="font-size:0.7em;color:#999; text-align:right; margin-top:-10px;">(Material Clarity)</div>
+                 </div>
+
+                <!-- Bio Params -->
+                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:5px; margin-top:10px;">
                     <div>
-                        <label style="margin:0 0 4px; font-size:0.8em">
-                            Kd (Atten)
-                            <div class="tooltip-container"><span class="info-icon">?</span><span class="tooltip-text"><strong>Diffuse Attenuation (Kd PAR):</strong> How quickly light fades with depth. Clear/Low turbidity reef water averages <strong>0.05 - 0.15</strong>.</span></div>
-                        </label>
-                        <input type="number" id="kInput" class="param-input" value="0.09" step="0.01" style="width:100%">
-                    </div>
-                    <div>
-                        <label style="margin:0 0 4px; font-size:0.8em">
-                            LCP
-                            <div class="tooltip-container"><span class="info-icon">?</span><span class="tooltip-text"><strong>Light Compensation Point:</strong> Min light for Net Photosynthesis > 0.</span></div>
-                        </label>
+                        <label style="font-size:0.75em; margin:0;">LCP</label>
                         <input type="number" id="lcpInput" class="param-input" value="50" style="width:100%">
                     </div>
                     <div>
-                        <label style="margin:0 0 4px; font-size:0.8em">
-                            LSP
-                            <div class="tooltip-container"><span class="info-icon">?</span><span class="tooltip-text"><strong>Light Saturation Point:</strong> Intensity where photosynthesis maxes out.</span></div>
-                        </label>
+                        <label style="font-size:0.75em; margin:0;">LSP</label>
                         <input type="number" id="lspInput" class="param-input" value="300" style="width:100%">
                     </div>
                     <div>
-                        <label style="margin:0 0 4px; font-size:0.8em">
-                            PIT
-                            <div class="tooltip-container"><span class="info-icon">?</span><span class="tooltip-text"><strong>Photoinhibition Threshold:</strong> Intensity causing stress/damage.</span></div>
-                        </label>
+                        <label style="font-size:0.75em; margin:0;">PIT</label>
                         <input type="number" id="pitInput" class="param-input" value="800" style="width:100%">
                     </div>
                 </div>
@@ -199,20 +246,11 @@
                 <h2>Irradiance Data</h2>
                 <div style="font-size: 0.8em; color: #666; margin-bottom: 10px;">
                     Hourly averages (µmol/m²/s).
-                    <div class="tooltip-container">
-                        <span class="info-icon">?</span>
-                        <span class="tooltip-text">Paste average hourly values, for instance from PVGIS (suggestion - average hourly from last 3 years for study month(s)).</span>
-                    </div>
-                </div>
-
-                <div class="table-header">
-                    <span class="time-col-head">Time</span>
-                    <span class="val-col-head">Direct (Gb)</span>
-                    <span class="val-col-head">Diffuse (Gd)</span>
                 </div>
                 
                 <div class="input-scroll-container" id="timeSlotContainer">
-                    </div>
+                    <!-- JS Generated -->
+                </div>
                 
                 <button onclick="updatePlot()" style="width:100%; margin-top:15px; padding: 10px; background: var(--primary); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">
                     Update Model
@@ -227,67 +265,88 @@
                 <div class="stats-grid">
                     
                     <div class="stat-card">
-                        <h4>Solar Profile</h4>
-                        <span class="stat-sub-val">Peak: <strong id="solarPeakDisplay" style="color:#333">--:--</strong></span>
-                        <span class="stat-sub-val" style="margin-top:10px;">Shade Window:</span>
-                        <strong id="shadedPeriod" style="color:#333; font-size:0.9em;">--:-- - --:--</strong>
+                        <h4>Shade Windows</h4>
+                        <div style="text-align:left; font-size:0.9em; margin-top:5px;">
+                            <div style="color:var(--col-a); margin-bottom:5px;">
+                                <strong id="lblWinA">Method A:</strong><br>
+                                <span id="winA">--:-- - --:--</span>
+                            </div>
+                            <div style="color:var(--col-b)">
+                                <strong id="lblWinB">Method B:</strong><br>
+                                <span id="winB">--:-- - --:--</span>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="stat-card">
-                        <h4>
-                            Growth Zones (% of Daily Energy)
-                            <div class="tooltip-container"><span class="info-icon">?</span><span class="tooltip-text"><strong>Opt:</strong> Light-Limited (LCP-LSP).<br><strong>Sat:</strong> Saturated (LSP-PIT).<br><strong>Inh:</strong> Inhibited (>PIT).</span></div>
-                        </h4>
+                        <h4>Dose Distribution (% Energy)</h4>
                         <table class="comparison-table">
                             <thead>
                                 <tr>
-                                    <th>Zone</th>
+                                    <th>Regime</th>
                                     <th class="col-none">None</th>
-                                    <th class="col-const">Const</th>
-                                    <th class="col-dyn">Dyn</th>
+                                    <th class="col-a" id="headA">A</th>
+                                    <th class="col-b" id="headB">B</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr>
-                                    <td>Optimal</td>
-                                    <td class="col-none" id="noneOpt">0%</td>
-                                    <td class="col-const" id="constOpt">0%</td>
-                                    <td class="col-dyn" id="dynOpt">0%</td>
+                                    <td>Respiration</td>
+                                    <td id="noneSub">0%</td>
+                                    <td id="aSub">0%</td>
+                                    <td id="bSub">0%</td>
+                                </tr>
+                                <tr>
+                                    <td>Light Ltd.</td>
+                                    <td id="noneOpt">0%</td>
+                                    <td id="aOpt">0%</td>
+                                    <td id="bOpt">0%</td>
                                 </tr>
                                 <tr>
                                     <td>Saturated</td>
-                                    <td class="col-none" id="noneSat">0%</td>
-                                    <td class="col-const" id="constSat">0%</td>
-                                    <td class="col-dyn" id="dynSat">0%</td>
+                                    <td id="noneSat">0%</td>
+                                    <td id="aSat">0%</td>
+                                    <td id="bSat">0%</td>
                                 </tr>
                                 <tr style="border-top:1px solid #eee;">
-                                    <td style="color:#e76f51;">Inhibited</td>
-                                    <td class="col-none" id="noneInh">0%</td>
-                                    <td class="col-const" id="constInh">0%</td>
-                                    <td class="col-dyn" id="dynInh">0%</td>
+                                    <td style="color:#e76f51;">Inhibition</td>
+                                    <td id="noneInh">0%</td>
+                                    <td id="aInh">0%</td>
+                                    <td id="bInh">0%</td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
 
                     <div class="stat-card">
-                        <h4>
-                            Daily Light Integral
-                            <div class="tooltip-container"><span class="info-icon">?</span><span class="tooltip-text">Total photons per day (mol/m²/day).</span></div>
-                        </h4>
-                        <div style="display:flex; justify-content:space-around; align-items:flex-end;">
+                        <h4>Daily Light Integral</h4>
+                        <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:10px;">
                             <div>
-                                <span class="stat-sub-val col-const">Const</span>
-                                <span class="stat-main-val" id="constDLI" style="font-size:1.1em;">0.00</span>
+                                <span class="stat-sub-val col-none">None</span>
+                                <span class="stat-main-val" id="dliNone" style="font-size:1.1em; color:#666">0.0</span>
                             </div>
                             <div>
-                                <span class="stat-sub-val col-dyn">Dyn</span>
-                                <span class="stat-main-val" id="dynDLI" style="font-size:1.1em;">0.00</span>
+                                <span class="stat-sub-val col-a" id="dliLblA">A</span>
+                                <span class="stat-main-val" id="dliA" style="font-size:1.1em; color:var(--col-a)">0.0</span>
+                            </div>
+                            <div>
+                                <span class="stat-sub-val col-b" id="dliLblB">B</span>
+                                <span class="stat-main-val" id="dliB" style="font-size:1.1em; color:var(--col-b)">0.0</span>
                             </div>
                         </div>
-                        <div style="margin-top:8px; border-top:1px solid #eee; padding-top:4px;">
-                            <span class="stat-sub-val">Difference: <strong id="dliDifference">0%</strong></span>
-                            <span class="stat-sub-val" style="font-size:0.75em; color:#999;">Unshaded DLI: <span id="noneDLI">0.00</span></span>
+                        
+                        <div class="sensitivity-box">
+                            <div style="font-weight:600; margin-bottom:5px; font-size:0.9em">
+                                Sensitivity (Kd ± 0.02)
+                            </div>
+                            <div class="sens-row">
+                                <span class="col-a" id="sensLblA">A:</span>
+                                <span id="sensA">--</span>
+                            </div>
+                            <div class="sens-row">
+                                <span class="col-b" id="sensLblB">B:</span>
+                                <span id="sensB">--</span>
+                            </div>
                         </div>
                     </div>
 
@@ -304,11 +363,9 @@
     </div>
 
     <footer>
-        <div>Developed by Graham Patterson. Email <a href="mailto:graham@reef-scuba.org" style="color:var(--primary);text-decoration:none;">graham@reef-scuba.org</a> with questions.</div>
+        <div>Developed by Graham Patterson.</div>
         <div class="footer-links">
             <a href="https://buymeacoffee.com/coralgraham" target="blank">Buy me a coffee :)</a>
-            <a href="https://www.instagram.com/graham.ocean/" target="blank" title="Reef Roundup">Follow on Instagram ❤️</a>
-            <a href="https://www.reef-scuba.org" target="blank" title="Reef Roundup">Learn more about REEF Scuba</a>
         </div>
     </footer>
 
@@ -326,6 +383,14 @@
         // --- INIT ---
         function initTable() {
             const container = document.getElementById('timeSlotContainer');
+            if(container.children.length > 0) return; // already init
+            
+            // Header
+            const hdr = document.createElement('div');
+            hdr.className = 'table-header';
+            hdr.innerHTML = `<span class="time-col-head">Time</span><span class="val-col-head">Gb</span><span class="val-col-head">Gd</span>`;
+            container.appendChild(hdr);
+
             for (let h = 5; h < 21; h++) {
                 const label = `${String(h).padStart(2,'0')}:00`;
                 const dataIndex = h - defaultStartHour;
@@ -347,10 +412,13 @@
         function readInputs() {
             baseHours = []; basePAR_Gb = []; basePAR_Gd = [];
             document.querySelectorAll('.time-row').forEach(row => {
-                const h = parseFloat(row.querySelector('.gb-input').dataset.hour);
-                baseHours.push(h);
-                basePAR_Gb.push(parseFloat(row.querySelector('.gb-input').value)||0);
-                basePAR_Gd.push(parseFloat(row.querySelector('.gd-input').value)||0);
+                const inpGb = row.querySelector('.gb-input');
+                if(inpGb){
+                    const h = parseFloat(inpGb.dataset.hour);
+                    baseHours.push(h);
+                    basePAR_Gb.push(parseFloat(inpGb.value)||0);
+                    basePAR_Gd.push(parseFloat(row.querySelector('.gd-input').value)||0);
+                }
             });
         }
 
@@ -368,9 +436,12 @@
         function calculateFresnel(hour, solarPeak, isDirect) {
             if (!document.getElementById('fresnelToggle').checked) return 1.0; 
             if (!isDirect) return 0.934; 
+            
             let z = Math.abs(hour - solarPeak) * 15;
             if (z > 89) z = 89;
             const th_i = z * (Math.PI / 180);
+            if (th_i < 0.0001) return 0.979;
+
             const sin_t = (1.0/1.33) * Math.sin(th_i);
             const th_t = Math.asin(sin_t);
             const Rs = Math.pow(Math.sin(th_i - th_t) / Math.sin(th_i + th_t), 2);
@@ -378,57 +449,85 @@
             return 1.0 - (0.5 * (Rs + Rp));
         }
 
-        function solveShade(targetRed, peak, depth, k, diffTrans) {
+        // Calculates Total DLI for a given configuration
+        function calculateScenarioDLI(peak, depth, k, mode, params) {
+            let tot = 0;
+            const dFact = Math.exp(-k * depth);
+            const step = timeStep * 3600; 
+
+            for (let t = baseHours[0]; t <= baseHours[baseHours.length-1]; t += timeStep) {
+                let Gb = interpolate(t, baseHours, basePAR_Gb) * calculateFresnel(t, peak, true);
+                let Gd = interpolate(t, baseHours, basePAR_Gd) * calculateFresnel(t, peak, false);
+                
+                let Gb_z = Gb * dFact;
+                let Gd_z = Gd * dFact;
+                let I_z = Gb_z + Gd_z;
+
+                if (mode === 'unshaded') {
+                    // no op
+                } 
+                else if (mode === 'dynamic') {
+                    if (t >= params.sStart && t < params.sEnd) {
+                        Gb_z = 0; 
+                        Gd_z = Gd_z * (params.diffTrans / 100);
+                        I_z = Gb_z + Gd_z;
+                    }
+                }
+                tot += I_z * step;
+            }
+            return tot / 1e6; // mol/m2/day
+        }
+
+        // Determine duration T (window +/- T) so Shade DLI matches [Unshaded * (1 - targetReduction)]
+        function solveShadeWindow(targetRed, peak, depth, k, diffTrans) {
             if (targetRed <= 0) return 0;
             if (targetRed >= 100) return 12;
 
-            const calcE = (dur) => {
-                let tot = 0;
-                const sStart = peak - dur, sEnd = peak + dur;
-                const dFact = Math.exp(-k * depth);
-                const step = timeStep * 3600;
+            const dliFull = calculateScenarioDLI(peak, depth, k, 'unshaded', {});
+            const dliTarget = dliFull * (1 - targetRed/100);
 
-                for (let t = baseHours[0]; t <= baseHours[baseHours.length-1]; t += timeStep) {
-                    let Gb = interpolate(t, baseHours, basePAR_Gb) * calculateFresnel(t, peak, true);
-                    let Gd = interpolate(t, baseHours, basePAR_Gd) * calculateFresnel(t, peak, false);
-                    let Gb_z = Gb * dFact;
-                    let Gd_z = Gd * dFact;
-
-                    if (dur > 0 && t >= sStart && t < sEnd) {
-                        Gb_z = 0;
-                        Gd_z = Gd_z * (diffTrans / 100); 
-                    }
-                    tot += (Gb_z + Gd_z) * step;
-                }
-                return tot;
+            const calcDynamic = (dur) => {
+                return calculateScenarioDLI(peak, depth, k, 'dynamic', {
+                    sStart: peak - dur,
+                    sEnd: peak + dur,
+                    diffTrans: diffTrans
+                });
             };
-
-            const full = calcE(0);
-            if (full === 0) return 0;
-            const target = full * (1 - targetRed/100);
 
             let l=0, h=12, best=0;
             for(let i=0; i<20; i++){
                 let m = (l+h)/2;
-                if(calcE(m) > target) l = m; else h = m;
+                let d = calcDynamic(m);
+                if (d > dliTarget) {
+                    l = m; // Too bright, increase shade
+                } else {
+                    h = m; // Too dark, decrease shade
+                }
                 best = m;
             }
             return best;
         }
 
         function getStats(arr, lcp, lsp, pit) {
-            let s=0, o=0, sa=0, i=0, tot=0;
-            const step = timeStep * 3600;
+            let e_sub=0, e_opt=0, e_sat=0, e_inh=0;
+            let tot=0;
+            const step = timeStep * 3600; 
+
             arr.forEach(p => {
                 let e = p * step;
                 tot += e;
-                if (p < lcp) s += e;
-                else if (p < lsp) o += e;
-                else if (p < pit) sa += e;
-                else i += e;
+                if (p < lcp) { e_sub += e; } 
+                else if (p < lsp) { e_opt += e; } 
+                else if (p < pit) { e_sat += e; } 
+                else { e_inh += e; }
             });
+
             const pct = v => tot>0 ? (v/tot)*100 : 0;
-            return { dli: tot/1e6, opt: pct(o), sat: pct(sa), inh: pct(i) };
+            
+            return { 
+                dli: tot/1e6, 
+                dose: { sub: pct(e_sub), opt: pct(e_opt), sat: pct(e_sat), inh: pct(e_inh) }
+            };
         }
 
         function fmtTime(h) {
@@ -442,122 +541,210 @@
         function updatePlot() {
             readInputs();
             
-            // Peak
-            let maxG = -1, peak = 12;
-            for(let i=0; i<basePAR_Gb.length; i++){
-                if(basePAR_Gb[i]>maxG){ maxG=basePAR_Gb[i]; peak=baseHours[i]; }
-            }
-            if(maxG<=0) peak = (baseHours[0]+baseHours[baseHours.length-1])/2;
-
-            // Params
-            const S = parseInt(document.getElementById('shadingSlider').value);
             const depth = parseFloat(document.getElementById('depthSlider').value);
             const k = parseFloat(document.getElementById('kInput').value);
-            const diffTrans = parseFloat(document.getElementById('diffuseShadedSlider').value);
             const lcp = parseFloat(document.getElementById('lcpInput').value);
             const lsp = parseFloat(document.getElementById('lspInput').value);
             const pit = parseFloat(document.getElementById('pitInput').value) || 9999;
 
-            document.getElementById('shadingValue').innerText = S + '%';
+            // Scenario A
+            const nameA = document.getElementById('nameA').value || 'A';
+            const redA = parseInt(document.getElementById('sliderRedA').value);
+            const transA = parseInt(document.getElementById('sliderTransA').value);
+            document.getElementById('valRedA').innerText = redA + '%';
+            document.getElementById('valTransA').innerText = transA + '%';
+
+            // Scenario B
+            const nameB = document.getElementById('nameB').value || 'B';
+            const redB = parseInt(document.getElementById('sliderRedB').value);
+            const transB = parseInt(document.getElementById('sliderTransB').value);
+            document.getElementById('valRedB').innerText = redB + '%';
+            document.getElementById('valTransB').innerText = transB + '%';
+
             document.getElementById('depthValue').innerText = depth + 'm';
-            document.getElementById('diffuseShadedValue').innerText = diffTrans + '%';
 
-            // Calc
-            const T = solveShade(S, peak, depth, k, diffTrans);
-            const sStart = peak - T;
-            const sEnd = peak + T;
+            // 1. Determine Solar Peak (Unshaded)
+            let maxG = -1, peak = 12;
             const dFact = Math.exp(-k * depth);
+            for (let t = baseHours[0]; t <= baseHours[baseHours.length-1]; t += timeStep) {
+                let Gb = interpolate(t, baseHours, basePAR_Gb);
+                let Gd = interpolate(t, baseHours, basePAR_Gd);
+                let totalAtDepth = (Gb + Gd) * dFact; 
+                if(totalAtDepth > maxG) { maxG = totalAtDepth; peak = t; }
+            }
+            if(maxG<=0) peak = (baseHours[0]+baseHours[baseHours.length-1])/2;
 
-            const times = [], dC = [], dD = [], dNone = [];
+            // 2. Solve Windows
+            const durA = solveShadeWindow(redA, peak, depth, k, transA);
+            const winA = { start: peak - durA, end: peak + durA };
+
+            const durB = solveShadeWindow(redB, peak, depth, k, transB);
+            const winB = { start: peak - durB, end: peak + durB };
+
+            // 3. Generate Time Series
+            const times = [], distA = [], distB = [], distNone = [];
+            
             for (let t = baseHours[0]; t <= baseHours[baseHours.length-1]; t += timeStep) {
                 times.push(t);
+                
                 let Gb = interpolate(t, baseHours, basePAR_Gb) * calculateFresnel(t, peak, true);
                 let Gd = interpolate(t, baseHours, basePAR_Gd) * calculateFresnel(t, peak, false);
-                const parZ = (Gb + Gd) * dFact;
+                const parUnshaded = (Gb + Gd) * dFact;
 
-                // 1. None (Unshaded)
-                dNone.push(Math.max(0, parZ));
+                // None
+                distNone.push(Math.max(0, parUnshaded));
 
-                // 2. Constant Shading
-                dC.push(Math.max(0, parZ * (1 - S/100)));
-
-                // 3. Dynamic Shading
-                if (t >= sStart && t < sEnd) {
-                    dD.push(Math.max(0, (Gd * dFact) * (diffTrans/100)));
+                // A
+                if (t >= winA.start && t < winA.end) {
+                    let val = (Gd * dFact) * (transA/100);
+                    distA.push(Math.max(0, val));
                 } else {
-                    dD.push(Math.max(0, parZ));
+                    distA.push(Math.max(0, parUnshaded));
+                }
+
+                // B
+                if (t >= winB.start && t < winB.end) {
+                    let val = (Gd * dFact) * (transB/100);
+                    distB.push(Math.max(0, val));
+                } else {
+                    distB.push(Math.max(0, parUnshaded));
                 }
             }
 
-            // Stats UI
-            const stNone = getStats(dNone, lcp, lsp, pit);
-            const stC = getStats(dC, lcp, lsp, pit);
-            const stD = getStats(dD, lcp, lsp, pit);
+            // 4. Stats & UI
+            const stNone = getStats(distNone, lcp, lsp, pit);
+            const stA = getStats(distA, lcp, lsp, pit);
+            const stB = getStats(distB, lcp, lsp, pit);
 
-            document.getElementById('solarPeakDisplay').innerText = fmtTime(peak);
-            document.getElementById('shadedPeriod').innerText = `${fmtTime(sStart)} - ${fmtTime(sEnd)}`;
+            // Labels
+            document.getElementById('lblWinA').innerText = nameA + ":";
+            document.getElementById('lblWinB').innerText = nameB + ":";
+            document.getElementById('headA').innerText = nameA;
+            document.getElementById('headB').innerText = nameB;
+            document.getElementById('dliLblA').innerText = nameA;
+            document.getElementById('dliLblB').innerText = nameB;
+            document.getElementById('sensLblA').innerText = nameA + ":";
+            document.getElementById('sensLblB').innerText = nameB + ":";
+
+            // Windows
+            document.getElementById('winA').innerText = `${fmtTime(winA.start)} - ${fmtTime(winA.end)}`;
+            document.getElementById('winB').innerText = `${fmtTime(winB.start)} - ${fmtTime(winB.end)}`;
 
             // DLI
-            const dliDiff = stC.dli>0 ? ((stD.dli - stC.dli)/stC.dli)*100 : 0;
-            const elDiff = document.getElementById('dliDifference');
-            elDiff.innerText = (dliDiff>0?'+':'') + dliDiff.toFixed(1) + '%';
-            elDiff.className = dliDiff >= 0 ? 'diff-pos' : 'diff-neg';
+            document.getElementById('dliNone').innerText = stNone.dli.toFixed(2);
+            document.getElementById('dliA').innerText = stA.dli.toFixed(2);
+            document.getElementById('dliB').innerText = stB.dli.toFixed(2);
 
-            document.getElementById('constDLI').innerText = stC.dli.toFixed(2);
-            document.getElementById('dynDLI').innerText = stD.dli.toFixed(2);
-            document.getElementById('noneDLI').innerText = stNone.dli.toFixed(2);
-
-            // Table Update Helper
-            const setTbl = (id, val) => document.getElementById(id).innerText = val.toFixed(1) + '%';
+            // Table
+            const fmtCell = (val) => `<span class="val-primary">${val.toFixed(0)}%</span>`;
             
-            // None
-            setTbl('noneOpt', stNone.opt);
-            setTbl('noneSat', stNone.sat);
-            setTbl('noneInh', stNone.inh);
-            // Const
-            setTbl('constOpt', stC.opt);
-            setTbl('constSat', stC.sat);
-            setTbl('constInh', stC.inh);
-            // Dyn
-            setTbl('dynOpt', stD.opt);
-            setTbl('dynSat', stD.sat);
-            setTbl('dynInh', stD.inh);
+            document.getElementById('noneSub').innerHTML = fmtCell(stNone.dose.sub);
+            document.getElementById('aSub').innerHTML = fmtCell(stA.dose.sub);
+            document.getElementById('bSub').innerHTML = fmtCell(stB.dose.sub);
 
-            renderChart(times, dC, dD, dNone, sStart, sEnd, lcp, lsp, pit);
+            document.getElementById('noneOpt').innerHTML = fmtCell(stNone.dose.opt);
+            document.getElementById('aOpt').innerHTML = fmtCell(stA.dose.opt);
+            document.getElementById('bOpt').innerHTML = fmtCell(stB.dose.opt);
+
+            document.getElementById('noneSat').innerHTML = fmtCell(stNone.dose.sat);
+            document.getElementById('aSat').innerHTML = fmtCell(stA.dose.sat);
+            document.getElementById('bSat').innerHTML = fmtCell(stB.dose.sat);
+
+            document.getElementById('noneInh').innerHTML = fmtCell(stNone.dose.inh);
+            document.getElementById('aInh').innerHTML = fmtCell(stA.dose.inh);
+            document.getElementById('bInh').innerHTML = fmtCell(stB.dose.inh);
+
+            // Sensitivity
+            const runSens = (k_val, dur, trans) => {
+                let d = calculateScenarioDLI(peak, depth, k_val, 'dynamic', {sStart:peak-dur, sEnd:peak+dur, diffTrans: trans});
+                return d.toFixed(2);
+            };
+            document.getElementById('sensA').innerText = `${runSens(k+0.02, durA, transA)} - ${runSens(k-0.02, durA, transA)}`;
+            document.getElementById('sensB').innerText = `${runSens(k+0.02, durB, transB)} - ${runSens(k-0.02, durB, transB)}`;
+
+            renderChart(times, distNone, distA, distB, winA, winB, nameA, nameB, lcp, lsp, pit);
         }
 
         // --- CHART DRAW ---
-        function renderChart(lbls, dC, dD, dN, sStart, sEnd, lcp, lsp, pit) {
+        function renderChart(lbls, dNone, dA, dB, winA, winB, nameA, nameB, lcp, lsp, pit) {
             const ctx = document.getElementById('parChart').getContext('2d');
-            const maxY = Math.max(...dN, lsp, (pit<2000?pit:0)) * 1.1;
+            const maxY = Math.max(...dNone, lsp, (pit<2000?pit:0)) * 1.1;
 
             if (chartInstance) chartInstance.destroy();
 
             chartInstance = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: lbls.map(fmtTime),
+                    labels: lbls, 
                     datasets: [
-                        { label: 'Unshaded', data: dN, borderColor: '#ccc', borderWidth: 1, pointRadius:0, tension:0.2, borderDash:[5,5] },
-                        { label: 'Constant', data: dC, borderColor: '#0077b6', backgroundColor: 'rgba(0, 119, 182, 0.1)', fill: true, borderWidth: 2, pointRadius:0, tension:0.2 },
-                        { label: 'Dynamic', data: dD, borderColor: '#06d6a0', backgroundColor: 'rgba(6, 214, 160, 0.1)', fill: true, borderWidth: 2, pointRadius:0, tension:0.2 }
+                        { 
+                            label: 'Unshaded', 
+                            data: dNone, 
+                            borderColor: '#ccc', 
+                            borderWidth: 2, 
+                            borderDash: [5,5], 
+                            pointRadius:0, 
+                            tension:0.2,
+                            order: 3
+                        },
+                        { 
+                            label: nameA, 
+                            data: dA, 
+                            borderColor: '#0077b6', 
+                            backgroundColor: 'rgba(0, 119, 182, 0.1)', 
+                            fill: false, 
+                            borderWidth: 2, 
+                            pointRadius:0, 
+                            tension:0.2,
+                            order: 1
+                        },
+                        { 
+                            label: nameB, 
+                            data: dB, 
+                            borderColor: '#ea580c', 
+                            backgroundColor: 'rgba(234, 88, 12, 0.1)', 
+                            fill: false, 
+                            borderWidth: 2, 
+                            pointRadius:0, 
+                            tension:0.2, 
+                            order: 2
+                        }
                     ]
                 },
                 options: {
                     responsive: true, maintainAspectRatio: false,
                     scales: {
                         y: { beginAtZero: true, suggestedMax: maxY, title: {display:true, text:'PAR (µmol/m²/s)'} },
-                        x: { ticks: { maxTicksLimit: 12 } }
+                        x: { 
+                            type: 'linear', 
+                            bounds: 'data',
+                            ticks: { 
+                                stepSize: 1,
+                                callback: function(value) { return fmtTime(value); } 
+                            } 
+                        }
                     },
                     plugins: {
                         legend: { position: 'top', align: 'end' },
-                        tooltip: { mode: 'index', intersect: false },
+                        tooltip: { 
+                            mode: 'index', intersect: false,
+                            callbacks: { title: (ctx) => fmtTime(ctx[0].parsed.x) }
+                        },
                         annotation: {
                             annotations: {
-                                shadeBox: {
-                                    type: 'box', xMin: sStart, xMax: sEnd, yMin: 0, yMax: '100%',
-                                    backgroundColor: 'rgba(50, 50, 50, 0.05)', borderWidth: 0,
-                                    label: { enabled: true, content: 'Shade Window', position: 'start', color: '#888', font: {size:10}, yAdjust: 10}
+                                shadeBoxA: {
+                                    type: 'box', xMin: winA.start, xMax: winA.end, yMin: 0, yMax: 'max',
+                                    backgroundColor: 'rgba(0, 119, 182, 0.05)', borderWidth: 0,
+                                    label: { enabled: true, content: nameA, position: 'start', color: '#0077b6', font: {size:10}, yAdjust: 10}
+                                },
+                                shadeBoxB: {
+                                    type: 'box', xMin: winB.start, xMax: winB.end, yMin: 0, yMax: 'max',
+                                    backgroundColor: 'rgba(234, 88, 12, 0.05)', borderWidth: 0,
+                                    label: { enabled: true, content: nameB, position: 'start', color: '#ea580c', font: {size:10}, yAdjust: 10}
+                                },
+                                lcpLine: {
+                                    type: 'line', yMin: lcp, yMax: lcp, borderColor: '#6c757d', borderWidth: 1, borderDash: [2,2],
+                                    label: { enabled: true, content: 'LCP', position: 'start', backgroundColor: 'rgba(108, 117, 125, 0.8)', font:{size:9}}
                                 },
                                 lspLine: {
                                     type: 'line', yMin: lsp, yMax: lsp, borderColor: '#ffd60a', borderWidth: 1, borderDash: [5,5],
@@ -577,7 +764,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             initTable();
             document.querySelectorAll('input').forEach(el => {
-                const ev = (el.type==='range'||el.type==='checkbox')?'input':'change';
+                const ev = (el.type==='range'||el.type==='checkbox'||el.type==='text')?'input':'change';
                 el.addEventListener(ev, updatePlot);
             });
             updatePlot();
