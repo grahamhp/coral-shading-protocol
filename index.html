@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Coral Shading Protocol v3.2</title>
+    <link rel="icon" href="https://static1.squarespace.com/static/61817da460d28f5b55fa41a0/t/697ffd506b89e34d5c4bf301/1769995600418/Untitled+design+%282%29.png">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.4.0/dist/chartjs-plugin-annotation.min.js"></script>
     <style>
@@ -85,7 +86,7 @@
         .sensitivity-box { margin-top: auto; padding-top: 10px; border-top: 1px solid #eee; text-align: left; font-size: 0.8em; color: #666; }
         .sens-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
 
-        /* --- TOOLTIPS --- */
+        /* --- TOOLTIPS (REFRESHED) --- */
         .tooltip-container { position: relative; display: inline-block; margin-left: 5px; vertical-align: middle; }
         .info-icon { 
             width: 14px; height: 14px; background: #b0c4de; color: white; border-radius: 50%; 
@@ -97,17 +98,26 @@
             border-radius: 5px; padding: 10px 12px; position: absolute; z-index: 100;
             font-size: 0.75em; line-height: 1.4; opacity: 0; transition: 0.2s;
             box-shadow: 0 4px 10px rgba(0,0,0,0.2); pointer-events: none;
+            /* Default: Above */
             bottom: 135%; left: 50%; transform: translateX(-50%);
         }
 
         .tooltip-text::after {
             content: ""; position: absolute; left: 50%; margin-left: -5px;
             border-width: 5px; border-style: solid; 
+            /* Default arrow points down */
             top: 100%; border-color: #333 transparent transparent transparent;
         }
 
-        .tooltip-text.tooltip-bottom { bottom: auto; top: 135%; }
-        .tooltip-text.tooltip-bottom::after { top: auto; bottom: 100%; border-color: transparent transparent #333 transparent; }
+        /* Variant: Bottom (Dropdown) */
+        .tooltip-text.tooltip-bottom {
+            bottom: auto; top: 135%;
+        }
+        .tooltip-text.tooltip-bottom::after {
+            top: auto; bottom: 100%; 
+            border-color: transparent transparent #333 transparent;
+        }
+
         .tooltip-container:hover .tooltip-text { visibility: visible; opacity: 1; }
 
         /* --- CHART --- */
@@ -152,6 +162,8 @@
         .footer-links { margin-top: 10px; display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;}
         .footer-links a { color: var(--primary); text-decoration: none; font-weight: 500; transition: color 0.2s; }
         .footer-links a:hover { color: var(--accent); text-decoration: underline; }
+        .logo-container { display:flex; justify-content:center; align-items:center; gap:10px; }
+        .footer-logo { height:30px; width:auto; }
     </style>
 </head>
 <body>
@@ -178,33 +190,49 @@
                 </label>
 
                 <label>
-                    Target DLI Reduction (%)
+                    Constant Rated Reduction (%)
                     <div class="tooltip-container">
                         <span class="info-icon">?</span>
-                        <span class="tooltip-text tooltip-bottom">Sets the target reduction for the 'Constant' line. This value calculates the shade duration required for the 'Dynamic' plan to match the same DLI.</span>
+                        <span class="tooltip-text tooltip-bottom">The manufacturers rating for the shade cloth used in the Constant regime (e.g. 50%). This sets the day-long reduction for Direct light.</span>
                     </div>
-                    <span id="shadingValue" style="color:var(--primary)">0</span>
+                    <span id="shadingValue" style="color:var(--primary)">50</span>
                 </label>
-                <input type="range" min="0" max="100" step="1" value="0" id="shadingSlider">
+                <input type="range" min="0" max="100" step="1" value="50" id="shadingSlider">
+
+                <label>
+                    <div>
+                        Constant Diffuse Blocked (%)
+                        <div class="tooltip-container">
+                            <span class="info-icon">?</span>
+                            <span class="tooltip-text tooltip-bottom">Fine-tune the amount of diffuse light blocked by the Constant shade cloth based on field measurements. Defaults to match Rated Reduction when synced.</span>
+                        </div>
+                    </div>
+                    <span id="constDiffuseValue" style="color:var(--primary)">50</span>
+                </label>
+                <input type="range" min="0" max="100" step="1" value="50" id="constDiffuseSlider" disabled>
+                
+                <div style="font-size:0.8em; color:#666; margin-top:-5px; display:flex; align-items:center; gap:5px;">
+                    <input type="checkbox" id="syncConstant" checked style="margin:0; width:auto; cursor:pointer;">
+                    <label for="syncConstant" style="margin:0; font-weight:normal; cursor:pointer;">Sync to Rated Reduction</label>
+                </div>
+
+                <label>
+                    <div>
+                        Dynamic Diffuse Blocked (%)
+                        <div class="tooltip-container">
+                            <span class="info-icon">?</span>
+                            <span class="tooltip-text">Percentage of scattered diffuse light blocked by the dynamic structure. (e.g. 85% Blocked = 15% Transmitted).</span>
+                        </div>
+                    </div>
+                    <span id="diffuseShadedValue" style="color:var(--primary)">85</span>
+                </label>
+                <input type="range" min="0" max="100" step="1" value="85" id="diffuseShadedSlider">
 
                 <label>
                     Depth (meters)
                     <span id="depthValue" style="color:var(--primary)">0</span>
                 </label>
                 <input type="range" min="0" max="20" step="0.1" value="0" id="depthSlider">
-
-                <label>
-                    <div>
-                        Diffuse Transmittance
-                        <div class="tooltip-container">
-                            <span class="info-icon">?</span>
-                            <span class="tooltip-text">The transparency of your shading material. 100% = Clear, 0% = Opaque. Affects how much diffuse light enters during the shade window.</span>
-                        </div>
-                    </div>
-                    <span id="diffuseShadedValue" style="color:var(--primary)">90</span>
-                </label>
-                <input type="range" min="0" max="100" step="1" value="50" id="diffuseShadedSlider">
-                <div style="font-size:0.75em; color:#888; margin-top:-10px; text-align:right;">(% Passing Through)</div>
 
                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:20px;">
                     <div>
@@ -235,6 +263,14 @@
                         </label>
                         <input type="number" id="pitInput" class="param-input" value="800" style="width:100%">
                     </div>
+                </div>
+
+                <div style="margin-top:20px; padding-top:15px; border-top:1px solid #eee;">
+                    <label>
+                        Dynamic Height Above Coral
+                        <span id="heightDisplay" style="color:var(--primary)">1.0m</span>
+                    </label>
+                    <input type="range" min="0.5" max="5.0" step="0.05" value="1.0" id="heightSlider">
                 </div>
             </div>
 
@@ -271,19 +307,43 @@
             <div class="panel">
                 <div class="stats-grid">
                     
+                    <!-- LEFT CARD: DLI -->
                     <div class="stat-card">
                         <h4>
-                            Solar Profile (At Depth)
-                            <div class="tooltip-container">
-                                <span class="info-icon">?</span>
-                                <span class="tooltip-text">Peak time and Shade Window are calculated based on Total PAR (Gb+Gd) after depth attenuation.</span>
-                            </div>
+                            Daily Light Integral
+                            <div class="tooltip-container"><span class="info-icon">?</span><span class="tooltip-text">Total photon energy received per day (mol/m²/day). Calculated by integrating PAR over the 24h cycle.</span></div>
                         </h4>
-                        <span class="stat-sub-val">Peak: <strong id="solarPeakDisplay" style="color:#333">--:--</strong></span>
-                        <span class="stat-sub-val" style="margin-top:10px;">Dynamic Shade Window:</span>
-                        <strong id="shadedPeriod" style="color:#333; font-size:1.1em;">--:-- - --:--</strong>
+                        <div style="display:flex; justify-content:space-around; align-items:flex-end;">
+                            <div>
+                                <span class="stat-sub-val col-const">Constant</span>
+                                <span class="stat-main-val" id="constDLI">0.00</span>
+                            </div>
+                            <div>
+                                <span class="stat-sub-val col-dyn">Dynamic</span>
+                                <span class="stat-main-val" id="dynDLI">0.00</span>
+                            </div>
+                        </div>
+                        <div style="margin-top:8px; border-top:1px solid #eee; padding-top:4px;">
+                             <span class="stat-sub-val" style="font-size:0.75em; color:#999;">Unshaded DLI: <strong id="noneDLI" style="color:#666;">0.00</strong></span>
+                        </div>
+                        
+                        <div class="sensitivity-box">
+                            <div style="font-weight:600; margin-bottom:5px;">
+                                Sensitivity (Kd ± 0.02)
+                                <div class="tooltip-container"><span class="info-icon">?</span><span class="tooltip-text tooltip-bottom">Shows how DLI changes if water clarity fluctuates (Kd ± 0.02). Useful for estimating risk if water gets muddier or clearer than expected.</span></div>
+                            </div>
+                            <div class="sens-row">
+                                <span>Unshaded:</span>
+                                <span id="sensUnshaded">--</span>
+                            </div>
+                            <div class="sens-row">
+                                <span class="col-dyn">Dynamic:</span>
+                                <span id="sensDyn">--</span>
+                            </div>
+                        </div>
                     </div>
 
+                    <!-- CENTER CARD: Dose Distribution -->
                     <div class="stat-card">
                         <h4>
                             Dose distribution by regime
@@ -336,37 +396,27 @@
                         </table>
                     </div>
 
+                    <!-- RIGHT CARD: Dynamic Solar Profile (Updated) -->
                     <div class="stat-card">
                         <h4>
-                            Daily Light Integral
-                            <div class="tooltip-container"><span class="info-icon">?</span><span class="tooltip-text">Total photon energy received per day (mol/m²/day). Calculated by integrating PAR over the 24h cycle.</span></div>
+                            Dynamic Solar Profile
+                            <div class="tooltip-container">
+                                <span class="info-icon">?</span>
+                                <span class="tooltip-text">Peak time and Shade Window are calculated based on Total PAR (Gb+Gd) after depth attenuation.</span>
+                            </div>
                         </h4>
-                        <div style="display:flex; justify-content:space-around; align-items:flex-end;">
-                            <div>
-                                <span class="stat-sub-val col-const">Constant</span>
-                                <span class="stat-main-val" id="constDLI">0.00</span>
-                            </div>
-                            <div>
-                                <span class="stat-sub-val col-dyn">Dynamic</span>
-                                <span class="stat-main-val" id="dynDLI">0.00</span>
-                            </div>
-                        </div>
-                        <div style="margin-top:8px; border-top:1px solid #eee; padding-top:4px;">
-                             <span class="stat-sub-val" style="font-size:0.75em; color:#999;">Unshaded DLI: <strong id="noneDLI" style="color:#666;">0.00</strong></span>
-                        </div>
+                        <span class="stat-sub-val">Peak: <strong id="solarPeakDisplay" style="color:#333">--:--</strong></span>
+                        <span class="stat-sub-val" style="margin-top:10px;">Dynamic Shade Window:</span>
+                        <strong id="shadedPeriod" style="color:#333; font-size:1.1em;">--:-- - --:--</strong>
                         
-                        <div class="sensitivity-box">
-                            <div style="font-weight:600; margin-bottom:5px;">
-                                Sensitivity (Kd ± 0.02)
-                                <div class="tooltip-container"><span class="info-icon">?</span><span class="tooltip-text tooltip-bottom">Shows how DLI changes if water clarity fluctuates (Kd ± 0.02). Useful for estimating risk if water gets muddier or clearer than expected.</span></div>
-                            </div>
-                            <div class="sens-row">
-                                <span>Unshaded:</span>
-                                <span id="sensUnshaded">--</span>
-                            </div>
-                            <div class="sens-row">
-                                <span class="col-dyn">Dynamic:</span>
-                                <span id="sensDyn">--</span>
+                        <div style="margin-top:auto; padding-top:12px; border-top:1px solid #eee; width:100%;">
+                            <span class="stat-sub-val">Required Cloth Width:</span>
+                            <div style="display:flex; justify-content:center; align-items:center; gap:5px;">
+                                <strong id="clothWidthDisplay" style="color:#006d77; font-size:1.2em;">-- m</strong>
+                                <div class="tooltip-container">
+                                    <span class="info-icon">?</span>
+                                    <span class="tooltip-text tooltip-bottom" style="right:0; transform:none; width:220px;">The cloth is assumed to be oriented east-west at a location where the sun travels in a perfect line overhead. Please calculate an orientation that's specific to your site and the sun's path during that time of year (i.e. https://www.suncalc.org)</span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -384,7 +434,10 @@
     </div>
 
     <footer>
-        <div>Developed by Graham Patterson.</div>
+        <div class="logo-container">
+            <img src="https://static1.squarespace.com/static/61817da460d28f5b55fa41a0/t/697ffd506b89e34d5c4bf301/1769995600418/Untitled+design+%282%29.png" alt="Logo" class="footer-logo">
+            <div>Developed by Graham Patterson.</div>
+        </div>
         <div class="footer-links">
             <a href="https://buymeacoffee.com/coralgraham" target="blank">Buy me a coffee :)</a>
         </div>
@@ -510,30 +563,55 @@
                 let I_z = (Gb + Gd) * dFact;
 
                 if (mode === 'constant') {
-                    I_z = I_z * (1 - params.targetRed/100);
+                    // Apply Rated Reduction to Direct Beam
+                    let constantGb = (Gb * dFact) * (1 - params.targetRed/100);
+                    
+                    // Apply Constant Diffuse BLOCKED logic (Reversed Transmittance)
+                    // If constDiffBlocked is set, we use (1 - constDiffBlocked/100) as factor
+                    let diffuseFactor = 0;
+                    if(typeof params.constDiffBlocked !== 'undefined') {
+                        diffuseFactor = 1 - (params.constDiffBlocked / 100);
+                    } else {
+                        // Fallback logic if needed, but should always be passed
+                        diffuseFactor = (1 - params.targetRed/100);
+                    }
+                    let constantGd = (Gd * dFact) * diffuseFactor;
+                    
+                    I_z = constantGb + constantGd;
                 } 
                 else if (mode === 'dynamic') {
                     if (t >= params.sStart && t < params.sEnd) {
-                        I_z = (Gd * dFact) * (params.diffTrans / 100);
+                        let Gb_z = 0; // Direct Blocked
+                        // Transmittance = 1 - Blocked
+                        let Gd_z = (Gd * dFact) * (1 - (params.diffBlocked / 100));
+                        I_z = Gb_z + Gd_z;
+                    } else {
+                        I_z = (Gb + Gd) * dFact; // Unshaded outside window
                     }
                 }
+                
                 tot += I_z * step;
             }
             return tot / 1e6; 
         }
 
-        function solveShadeWindow(targetRed, peak, depth, k, diffTrans) {
+        function solveShadeWindow(targetRed, constDiffBlocked, peak, depth, k, diffBlocked) {
             if (targetRed <= 0) return 0;
-            if (targetRed >= 100) return 12;
+            // If blocking 100% and diffBlocked is 100% -> full window
+            if (targetRed >= 100 && constDiffBlocked >= 100) return 12;
 
-            const dliFull = calculateScenarioDLI(peak, depth, k, 'unshaded', {});
-            const dliTarget = dliFull * (1 - targetRed/100);
+            // 1. Calculate Target Energy (From Constant Regime settings)
+            const dliTarget = calculateScenarioDLI(peak, depth, k, 'constant', {
+                targetRed: targetRed,
+                constDiffBlocked: constDiffBlocked
+            });
 
+            // 2. Helper to calc Dynamic DLI for a specific duration
             const calcDynamic = (dur) => {
                 return calculateScenarioDLI(peak, depth, k, 'dynamic', {
                     sStart: peak - dur,
                     sEnd: peak + dur,
-                    diffTrans: diffTrans
+                    diffBlocked: diffBlocked
                 });
             };
 
@@ -582,13 +660,15 @@
         function calculateModel() {
             readInputs();
             const S = parseInt(document.getElementById('shadingSlider').value);
+            const constDiffBlocked = parseInt(document.getElementById('constDiffuseSlider').value);
             const depth = parseFloat(document.getElementById('depthSlider').value);
             const k = parseFloat(document.getElementById('kInput').value);
-            const diffTrans = parseFloat(document.getElementById('diffuseShadedSlider').value);
+            const diffBlocked = parseFloat(document.getElementById('diffuseShadedSlider').value);
             const lcp = parseFloat(document.getElementById('lcpInput').value);
             const lsp = parseFloat(document.getElementById('lspInput').value);
             const pit = parseFloat(document.getElementById('pitInput').value) || 9999;
             const fresnel = document.getElementById('fresnelToggle').checked;
+            const structHeight = parseFloat(document.getElementById('heightSlider').value);
 
             // 1. Peak
             let maxG = -1, peak = 12;
@@ -602,7 +682,7 @@
             if(maxG<=0) peak = (baseHours[0]+baseHours[baseHours.length-1])/2;
 
             // 2. Window
-            const T = solveShadeWindow(S, peak, depth, k, diffTrans);
+            const T = solveShadeWindow(S, constDiffBlocked, peak, depth, k, diffBlocked);
             const sStart = peak - T;
             const sEnd = peak + T;
 
@@ -615,21 +695,37 @@
                 const parUnshaded = (Gb + Gd) * dFact;
 
                 dNone.push(Math.max(0, parUnshaded));
-                dConst.push(Math.max(0, parUnshaded * (1 - S/100)));
                 
+                // Constant Calculation (Using same logic as in Solver)
+                // Direct is reduced by Rated S
+                let constantGb = (Gb * dFact) * (1 - S/100);
+                // Diffuse is reduced by Blocked %
+                let diffuseFactor = 1 - (constDiffBlocked/100);
+                let constantGd = (Gd * dFact) * diffuseFactor;
+                dConst.push(Math.max(0, constantGb + constantGd));
+                
+                // Dynamic Calculation
                 if (t >= sStart && t < sEnd) {
-                    let val = (Gd * dFact) * (diffTrans/100);
+                    let val = (Gd * dFact) * (1 - diffBlocked/100);
                     dDyn.push(Math.max(0, val));
                 } else {
                     dDyn.push(Math.max(0, parUnshaded));
                 }
             }
 
-            // 4. Stats
+            // 4. Calculate Cloth Width
+            // T is half-duration in hours.
+            // 1h = 15deg. 
+            // Width = 2 * Height * tan(theta)
+            const theta = T * 15; // degrees
+            const rad = theta * (Math.PI / 180);
+            const calculatedWidth = 2 * structHeight * Math.tan(rad);
+
+            // 5. Stats
             return {
-                params: { S, depth, k, diffTrans, lcp, lsp, pit, fresnel },
+                params: { S, constDiffBlocked, depth, k, diffBlocked, lcp, lsp, pit, fresnel, structHeight },
                 times, dNone, dConst, dDyn,
-                meta: { peak, sStart, sEnd, T },
+                meta: { peak, sStart, sEnd, T, calculatedWidth },
                 stats: {
                     none: getStats(dNone, lcp, lsp, pit),
                     cnst: getStats(dConst, lcp, lsp, pit),
@@ -641,8 +737,8 @@
                         calculateScenarioDLI(peak, depth, k+0.02, 'unshaded', {})
                     ],
                     dynamic: [
-                        calculateScenarioDLI(peak, depth, k-0.02, 'dynamic', {sStart, sEnd, diffTrans}),
-                        calculateScenarioDLI(peak, depth, k+0.02, 'dynamic', {sStart, sEnd, diffTrans})
+                        calculateScenarioDLI(peak, depth, k-0.02, 'dynamic', {sStart, sEnd, diffBlocked}),
+                        calculateScenarioDLI(peak, depth, k+0.02, 'dynamic', {sStart, sEnd, diffBlocked})
                     ]
                 }
             };
@@ -654,10 +750,25 @@
             
             // Labels
             document.getElementById('shadingValue').innerText = m.params.S + '%';
+            document.getElementById('constDiffuseValue').innerText = m.params.constDiffBlocked + '%';
             document.getElementById('depthValue').innerText = m.params.depth + 'm';
-            document.getElementById('diffuseShadedValue').innerText = m.params.diffTrans + '%';
+            document.getElementById('diffuseShadedValue').innerText = m.params.diffBlocked + '%';
+            document.getElementById('heightDisplay').innerText = m.params.structHeight.toFixed(2) + 'm';
+            
             document.getElementById('solarPeakDisplay').innerText = fmtTime(m.meta.peak);
             document.getElementById('shadedPeriod').innerText = `${fmtTime(m.meta.sStart)} - ${fmtTime(m.meta.sEnd)}`;
+
+            // Cloth Width Display
+            const w = m.meta.calculatedWidth;
+            const h = m.params.structHeight;
+            const ratio = w / h;
+            
+            // Check Ratio > 6 or if width is essentially infinite (T close to 6)
+            if (ratio > 6 || m.meta.T >= 5.8) {
+                document.getElementById('clothWidthDisplay').innerText = "Full Cover";
+            } else {
+                document.getElementById('clothWidthDisplay').innerText = w.toFixed(2) + ' m';
+            }
 
             // DLI
             document.getElementById('constDLI').innerText = m.stats.cnst.dli.toFixed(2);
@@ -752,9 +863,11 @@
             
             // Parameters
             csv.push(`--- INPUT PARAMETERS ---`);
-            csv.push(`Target DLI Reduction (%),${m.params.S}`);
+            csv.push(`Constant Rated Reduction (%),${m.params.S}`);
+            csv.push(`Constant Diffuse Blocked (%),${m.params.constDiffBlocked}`);
             csv.push(`Depth (m),${m.params.depth}`);
-            csv.push(`Diffuse Transmittance (%),${m.params.diffTrans}`);
+            csv.push(`Dynamic Height Above Coral (m),${m.params.structHeight}`);
+            csv.push(`Dynamic Diffuse Blocked (%),${m.params.diffBlocked}`);
             csv.push(`Kd (Attenuation Coefficient),${m.params.k}`);
             csv.push(`Surface Reflection Model,${m.params.fresnel ? 'On' : 'Off'}`);
             csv.push(`LCP (Compensation Point),${m.params.lcp}`);
@@ -768,6 +881,11 @@
             csv.push(`Shading Window Start,${fmtTime(m.meta.sStart)}`);
             csv.push(`Shading Window End,${fmtTime(m.meta.sEnd)}`);
             csv.push(`Total Shading Duration (h),${(m.meta.T * 2).toFixed(2)}`);
+            
+            // Width Logic for CSV
+            const ratio = m.meta.calculatedWidth / m.params.structHeight;
+            const wStr = (ratio > 6 || m.meta.T >= 5.8) ? "Full Cover" : m.meta.calculatedWidth.toFixed(2);
+            csv.push(`Required Cloth Width (m),${wStr}`);
             csv.push(``);
             
             // Statistics Block
@@ -886,6 +1004,36 @@
                 const ev = (el.type==='range'||el.type==='checkbox')?'input':'change';
                 el.addEventListener(ev, updatePlot);
             });
+            
+            // SYNC LOGIC
+            const syncCheckbox = document.getElementById('syncConstant');
+            const ratedSlider = document.getElementById('shadingSlider');
+            const diffuseSlider = document.getElementById('constDiffuseSlider');
+            const diffuseValueDisplay = document.getElementById('constDiffuseValue');
+
+            function handleSync() {
+                if (syncCheckbox.checked) {
+                    diffuseSlider.value = ratedSlider.value;
+                    diffuseValueDisplay.innerText = ratedSlider.value;
+                    diffuseSlider.disabled = true;
+                    // Trigger model update
+                    updatePlot();
+                } else {
+                    diffuseSlider.disabled = false;
+                }
+            }
+
+            // Listeners for Sync
+            syncCheckbox.addEventListener('change', handleSync);
+            ratedSlider.addEventListener('input', () => {
+                if(syncCheckbox.checked) {
+                    diffuseSlider.value = ratedSlider.value;
+                    diffuseValueDisplay.innerText = ratedSlider.value;
+                }
+                updatePlot(); // Ensure main update runs
+            });
+            
+            // Initial call
             updatePlot();
         });
     </script>
