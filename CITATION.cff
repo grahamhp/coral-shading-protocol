@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite the version you used."
+title: "Coral Shading Protocol"
+version: "5.0.0"
+date-released: "2026-11-13"
+url: "https://grahamhp.github.io/coral-shading-protocol/"
+authors:
+  - family-names: Patterson
+    given-names: Graham
+license: MIT
+repository-code: "https://github.com/grahamhp/coral-shading-protocol"
+abstract: >-
+  Design tool for shading corals during heat stress: sizes a shade cloth or an opaque canopy and computes the
+  light corals receive under it, point by point, from hourly surface light and radiative-transfer tables for
+  the site's water.
+keywords:
+  - coral reefs
+  - coral bleaching
+  - shading
+  - underwater light
+  - radiative transfer

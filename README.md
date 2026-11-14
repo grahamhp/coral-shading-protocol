@@ -1,83 +1,98 @@
-# Coral Shading Protocol (CSP)
+# Coral Shading Protocol v5
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-3.2-blue.svg)](https://github.com/yourusername/repo-name)
+A design tool for shading corals during heat stress. It sizes a shade cloth (constant shading) or an opaque
+canopy that shades the corals only around midday (dynamic shading), and shows the light the corals receive
+under each, point by point, over a deployment.
 
-**A web-based modeling tool for designing shading regimes for coral conservation, restoration, and photobiology experiments.**
+There are two products with identical calculations:
 
-The **Coral Shading Protocol (CSP)** tool is designed to help practitioners plan effective light management strategies for coral nurseries, outplanting sites, and experimental tanks. It allows users to model underwater light fields based on site-specific data, calculating Daily Light Integrals (DLI) and categorizing energy into biological growth zones based on species-specific photophysiology.
+- **The browser app** (`webapp/`): one HTML file. Use it at
+  **https://grahamhp.github.io/coral-shading-protocol/**, or save that page and open it offline. No installation
+  and no Python.
+- **The Python package** `coralshading` (`python/`): the reference implementation, for scripts, batch runs and
+  checks with the full 3-D Monte Carlo. It downloads light data from PVGIS automatically.
 
-The tool contrasts **Constant Shading** (standard shade cloth/mesh) with **Dynamic Shading** (active management or sized 100% opaque shading to affect peak solar irradiance) to identify the most effective strategy for minimizing stress while supporting energy budget.
+## Using the app
 
-## 🔗 Live Demo
-[**Click here to use the tool online**](https://grahamhp.github.io/coral-shading-protocol/)
+Enter the site (map or coordinates), the deployment dates, the coral area (a MARRS Reef Star, a table, a rope or
+any rectangle or circle), its depth, the structure height and the water clarity (Kd; a popup gives typical values
+with sources). The app shows:
 
-## ✨ Key Features
+- the size of the shade cloth and the canopy;
+- daily light (mol m⁻² d⁻¹) under each and in open water, as maps and curves through the day;
+- hours of direct sun, light reduction and the coral's expected photosynthesis and P:R;
+- how much the result changes with water clarity, water scattering, wind and the structure's position.
 
-* **Irradiance Modeling:** Import hourly Direct ($G_b$) and Diffuse ($G_d$) irradiance data (compatible with PVGIS) to model site-specific light fields.
-* **Physics Engine:**
-    * Calculates **Fresnel Reflection** losses at the air-water interface based on solar zenith angle.
-    * Applies **Depth Attenuation** using the Beer-Lambert law and diffuse attenuation coefficient ($K_d$).
-    * Models **Diffuse Transmittance** for opaque objects floating on the water surface.
-* **Biological Integration:** Calculates energy budgets based on species-specific parameters:
-    * Light Compensation Points (LCP)
-    * Light Saturation Points (LSP)
-    * Photoinhibition Thresholds (PIT)
-* **Comparative Statistics:** Instantly compares DLI, Optimal Growth, and Inhibition percentages between Unshaded, Constant, and Dynamic regimes to inform restoration planning.
-* **Interactive Visualization:** Real-time plotting of PAR curves using Chart.js.
+Simple mode asks for the essentials; expert mode adds water scattering, clean and fouled cloth, independent
+cloth and canopy targets, set structure sizes, wind, grid spacing and coral parameters. Both modes let you set
+solar noon. A first answer
+appears in about 0.2 s; the full result follows in a few seconds. Results export as CSV and JSON.
 
-## 🚀 Usage Guide
+Light data: the Sipaway example is built in. For other sites the app opens the PVGIS download for the site (a
+typical year or real years); load the saved file or paste its text. PVGIS does not allow web pages to fetch
+its data directly, so this takes one extra click.
 
-### 1. Data Input
-Gather hourly average irradiance data for your restoration or study site. We recommend using [PVGIS](https://re.jrc.ec.europa.eu/pvg_tools/en/) to generate averages for your specific months of interest over the last 3 years.
+## Using the Python package
 
-### 2. Physical Parameters
-* **Surface Reflection:** Enable if using satellite/weather station data ("In-Air"). Disable if using underwater sensor data.
-* **Target Reduction:** Set your conservation goal (e.g., "Reduce total DLI by 30% to mitigate bleaching risk").
-* **Depth & Attenuation:** Input the depth of your nursery/site and the water turbidity ($K_d$).
+```
+pip install ./python
+coralshading design --lat 10.4675 --lon 123.4506 --tz 8 --start 2025-04-28 --end 2025-08-08 \
+    --target reef_star --depth 10 --height 0.75 --kd 0.21 --light tmy --out results/
+```
 
-### 3. Biological Parameters
-Input the photophysiological parameters of your target coral species ($LCP$, $LSP$, $PIT$). The tool uses these to determine how much "useful" vs. "stressful" light the coral receives under different regimes.
+```python
+from coralshading.design import design
+r = design(lat=10.4675, lon=123.4506, tz=8, start=(2025, 4, 28), end=(2025, 8, 8), kd=0.21)
+print(r.summary())
+r.to_csv("results/")
+r.mc_check()        # check the design with the 3-D Monte Carlo (a few minutes)
+```
 
-## 🧮 Scientific Basis
+A full 103-day design at the 5 cm grid takes about 4 minutes in Python (`spacing=0.1` is faster); the app
+takes a few seconds because it reorganizes the same equations for speed (the test suite checks that both give
+the same numbers). See
+`python/examples/quickstart.ipynb`.
 
-The tool operates on the following principles:
+## How it works
 
-1.  **Fresnel Reflection:** Calculates the angle-dependent transmission of the direct solar beam and the constant reflection of the diffuse sky (approx 6.6%).
-2.  **Beer-Lambert Law:** $I_z = I_0 \cdot e^{-K_d \cdot z}$
-3.  **Shading Logic:**
-    * *Constant:* Uniform reduction of scalar irradiance (simulating mesh/cloth).
-    * *Dynamic:* Binary exclusion of Direct Beam ($G_b$) during the calculated window, with partial transmittance of Diffuse light ($G_d$).
+Surface light (PVGIS, hourly) → PAR → refraction and waves at the surface → light in the water from tables made
+once by Monte Carlo for the water's clarity (Kd) and scattering (ω₀) → light at each point under the structures,
+direction by direction. Details and references: [docs/methods.md](docs/methods.md). Accuracy against an
+independent 3-D Monte Carlo: [docs/validation.md](docs/validation.md). Design choices and their reasons:
+[docs/DECISIONS.md](docs/DECISIONS.md). Measuring a site: [docs/field_protocol.md](docs/field_protocol.md).
 
-## 💻 Installation (Running Locally)
+## Versions
 
-Since this tool is a standalone static web application, no installation is required.
+- **v1.0**: sized the opaque canopy in the Sipaway shading experiment. Its files were lost in a hardware
+  failure.
+- **v3.2** (tag `v3.2`, commit `3b45b53c`): earlier public version.
+- **v4.2** (tag `v4.2`, commit `f3c2957a`): last version before v5. Attenuates direct and diffuse light
+  vertically with one Kd. Still available at https://grahamhp.github.io/coral-shading-protocol/v4.2/.
+- **v5.0**: rebuilt on radiative transfer. See [CHANGELOG.md](CHANGELOG.md).
 
-1.  Clone or download this repository.
-2.  Open `index.html` in any modern web browser (Chrome, Firefox, Safari, Edge).
-3.  The application runs entirely client-side; no server or internet connection is needed after downloading.
+## Repository
 
-## 🤝 Contributing
+- `webapp/`: browser app (TypeScript; `npm run build` writes `webapp/dist/index.html`).
+- `python/`: Python package and tests.
+- `shared/`: data both products read: light tables, coral presets, references, example data, golden test
+  values and validation results.
+- `docs/`: methods, validation, decisions, field protocol, release steps and methods-paper groundwork
+  (with figures).
+- `legacy/v4.2/`: the v4.2 app, published alongside v5 at `/v4.2/`.
 
-Contributions are welcome! If you have suggestions for improving the physics model or the interface:
-1.  Fork the project.
-2.  Create your feature branch (`git checkout -b feature/AmazingFeature`).
-3.  Commit your changes (`git commit -m 'Add some AmazingFeature'`).
-4.  Push to the branch (`git push origin feature/AmazingFeature`).
-5.  Open a Pull Request.
+## Development
 
-## 📄 Citation
+- Python tests: `cd python && python -m pytest`
+- App tests: `cd webapp && npm test` (Node 22.18 or later; runs TypeScript directly)
+- App type check: `cd webapp && npx tsc -p tsconfig.json`
+- App build: `cd webapp && npm run build`
+- After changing the engine, regenerate the golden values (`python -m coralshading.golden`) and run both test
+  suites; the app must reproduce the Python values to 10⁻⁹.
 
-If you use this tool for research, conservation planning, or restoration projects, please cite it as:
+## Citing
 
-> **Patterson, Graham** (2026). *Coral Shading Protocol (CSP) Web Application v3.2*. REEF Scuba. Available at: https://grahamhp.github.io/coral-shading-protocol/
+See [CITATION.cff](CITATION.cff). Please cite the version you used.
 
-## 👤 Author
+## Licence
 
-**Graham Patterson**
-* Organization: [REEF Scuba](https://www.reef-scuba.org)
-* Email: [graham@reef-scuba.org](mailto:graham@reef-scuba.org)
-* Support: [Buy me a coffee](https://buymeacoffee.com/coralgraham)
-
----
-*Distributed under the MIT License. See `LICENSE` for more information.*
+MIT. See [LICENSE](LICENSE).

@@ -1,0 +1,13 @@
+node_modules/
+dist/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.venv/
+shared/examples/raw/*seriescalc*
+
+# Monte Carlo build intermediates (tables are rebuilt from these; final tables are committed)
+shared/tables/parts/
+shared/tables/parts_split/
+shared/validation/log_*.txt
+shared/validation/engine_vs_mc_part*.json

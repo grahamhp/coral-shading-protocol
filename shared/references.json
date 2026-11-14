@@ -1,0 +1,439 @@
+{
+ "version": 1,
+ "note": "Every DOI was resolved on CrossRef and matched by title and year on the date given.",
+ "references": {
+  "McCree1972": {
+   "doi": "10.1016/0002-1571(72)90045-3",
+   "title": "Test of current definitions of photosynthetically active radiation against leaf photosynthesis data",
+   "year": 1972,
+   "authors": [
+    "McCree"
+   ],
+   "journal": "Agricultural Meteorology",
+   "checked": "2026-11-08 (CrossRef)"
+  },
+  "Erbs1982": {
+   "doi": "10.1016/0038-092x(82)90302-4",
+   "title": "Estimation of the diffuse radiation fraction for hourly, daily and monthly-average global radiation",
+   "year": 1982,
+   "authors": [
+    "Erbs",
+    "Klein",
+    "Duffie"
+   ],
+   "journal": "Solar Energy",
+   "checked": "2026-11-08 (CrossRef)"
+  },
+  "CoxMunk1954": {
+   "doi": "10.1364/josa.44.000838",
+   "title": "Measurement of the Roughness of the Sea Surface from Photographs of the Sun’s Glitter",
+   "year": 1954,
+   "authors": [
+    "Cox",
+    "Munk"
+   ],
+   "journal": "Journal of the Optical Society of America",
+   "checked": "2026-11-08 (CrossRef)"
+  },
+  "Reda2004": {
+   "doi": "10.1016/j.solener.2003.12.003",
+   "title": "Solar position algorithm for solar radiation applications",
+   "year": 2004,
+   "authors": [
+    "Reda",
+    "Andreas"
+   ],
+   "journal": "Solar Energy",
+   "checked": "2026-11-08 (CrossRef)"
+  },
+  "Kahng2010": {
+   "doi": "10.1007/s00338-010-0593-6",
+   "title": "Community ecology of mesophotic coral reef ecosystems",
+   "year": 2010,
+   "authors": [
+    "Kahng",
+    "Garcia-Sais",
+    "Spalding",
+    "Brokovich"
+   ],
+   "journal": "Coral Reefs",
+   "checked": "2026-11-08 (CrossRef)"
+  },
+  "Laverick2020": {
+   "doi": "10.1111/geb.13140",
+   "title": "A generalized light‐driven model of community transitions along coral reef depth gradients",
+   "year": 2020,
+   "authors": [
+    "Laverick",
+    "Tamir",
+    "Eyal",
+    "Loya"
+   ],
+   "journal": "Global Ecology and Biogeography",
+   "checked": "2026-11-08 (CrossRef)"
+  },
+  "Morgan2020": {
+   "doi": "10.3389/fmars.2020.571256",
+   "title": "Light Limitation and Depth-Variable Sedimentation Drives Vertical Reef Compression on Turbid Coral Reefs",
+   "year": 2020,
+   "authors": [
+    "Morgan",
+    "Moynihan",
+    "Sanwlani",
+    "Switzer"
+   ],
+   "journal": "Frontiers in Marine Science",
+   "checked": "2026-11-08 (CrossRef)"
+  },
+  "Luo2022": {
+   "doi": "10.1016/j.marenvres.2022.105613",
+   "title": "Light availability regulated by particulate organic matter affects coral assemblages on a turbid fringing reef",
+   "year": 2022,
+   "authors": [
+    "Luo",
+    "Huang",
+    "Lei",
+    "Yu"
+   ],
+   "journal": "Marine Environmental Research",
+   "checked": "2026-11-08 (CrossRef)"
+  },
+  "Spitters1986": {
+   "doi": "10.1016/0168-1923(86)90060-2",
+   "title": "Separating the diffuse and direct component of global radiation and its implications for modeling canopy photosynthesis Part I. Components of incoming radiation",
+   "year": 1986,
+   "authors": [
+    "Spitters",
+    "Toussaint",
+    "Goudriaan"
+   ],
+   "journal": "Agricultural and Forest Meteorology",
+   "checked": "2026-11-08 (CrossRef)"
+  },
+  "FournierForand1994": {
+   "doi": "10.1117/12.190063",
+   "title": "Analytic phase function for ocean water",
+   "year": 1994,
+   "authors": [
+    "Fournier",
+    "Forand"
+   ],
+   "journal": "SPIE Proceedings",
+   "checked": "2026-11-08 (CrossRef)"
+  },
+  "Mobley2002": {
+   "doi": "10.1364/ao.41.001035",
+   "title": "Phase function effects on oceanic light fields",
+   "year": 2002,
+   "authors": [
+    "Mobley",
+    "Sundman",
+    "Boss"
+   ],
+   "journal": "Applied Optics",
+   "checked": "2026-11-08 (CrossRef)"
+  },
+  "Petzold1972": {
+   "doi": "10.21236/ad0753474",
+   "title": "Volume Scattering Functions for Selected Ocean Waters",
+   "year": 1972,
+   "authors": [
+    "Petzold"
+   ],
+   "journal": "Technical report (DTIC AD0753474)",
+   "checked": "2026-11-08 (CrossRef)"
+  },
+  "Joseph1976": {
+   "doi": "10.1175/1520-0469(1976)033<2452:tdeafr>2.0.co;2",
+   "title": "The Delta-Eddington Approximation for Radiative Flux Transfer",
+   "year": 1976,
+   "authors": [
+    "Joseph",
+    "Wiscombe",
+    "Weinman"
+   ],
+   "journal": "Journal of the Atmospheric Sciences",
+   "checked": "2026-11-08 (CrossRef)"
+  },
+  "Wiscombe1977": {
+   "doi": "10.1175/1520-0469(1977)034<1408:tdmrya>2.0.co;2",
+   "title": "The Delta–<i>M</i>Method: Rapid Yet Accurate Radiative Flux Calculations for Strongly Asymmetric Phase Functions",
+   "year": 1977,
+   "authors": [
+    "Wiscombe"
+   ],
+   "journal": "Journal of the Atmospheric Sciences",
+   "checked": "2026-11-08 (CrossRef)"
+  },
+  "Gordon1989": {
+   "doi": "10.4319/lo.1989.34.8.1389",
+   "title": "Can the Lambert‐Beer law be applied to the diffuse attenuation coefficient of ocean water?",
+   "year": 1989,
+   "authors": [
+    "Gordon"
+   ],
+   "journal": "Limnology and Oceanography",
+   "checked": "2026-11-08 (CrossRef)"
+  },
+  "Huld2012": {
+   "doi": "10.1016/j.solener.2012.03.006",
+   "title": "A new solar radiation database for estimating PV performance in Europe and Africa",
+   "year": 2012,
+   "authors": [
+    "Huld",
+    "Müller",
+    "Gambardella"
+   ],
+   "journal": "Solar Energy",
+   "checked": "2026-11-08 (CrossRef)"
+  },
+  "BostromEinarsson2020": {
+   "doi": "10.1371/journal.pone.0226631",
+   "title": "Coral restoration – A systematic review of current methods, successes, failures and future directions",
+   "year": 2020,
+   "authors": [
+    "Boström-Einarsson L",
+    "Babcock RC",
+    "Bayraktarov E",
+    "Ceccarelli D"
+   ],
+   "journal": "PLOS ONE",
+   "checked": "2026-11-08 (CrossRef)"
+  },
+  "Kirk1984": {
+   "doi": "10.4319/lo.1984.29.2.0350",
+   "title": "Dependence of relationship between inherent and apparent optical properties of water on solar altitude",
+   "year": 1984,
+   "authors": [
+    "Kirk"
+   ],
+   "journal": "Limnology and Oceanography",
+   "checked": "2026-11-08 (CrossRef)"
+  },
+  "Macdonald2015": {
+   "doi": null,
+   "url": "https://researchonline.jcu.edu.au/46029/",
+   "title": "Turbidity and light attenuation in coastal waters of the Great Barrier Reef",
+   "year": 2015,
+   "authors": [
+    "Macdonald"
+   ],
+   "journal": "PhD thesis, James Cook University",
+   "checked": "2026-11-08 (repository record)"
+  },
+  "SH2018": {
+   "doi": "10.1371/journal.pone.0208607",
+   "title": "Diel versus time-integrated (daily) photosynthesis and irradiance relationships of coral reef organisms and communities",
+   "year": 2018,
+   "authors": [
+    "Sawall Y",
+    "Hochberg EJ"
+   ],
+   "journal": "PLOS ONE",
+   "cite": "Sawall Y, Hochberg EJ (2018) Diel versus time-integrated (daily) photosynthesis and irradiance relationships of coral reef organisms and communities. PLoS ONE 13:e0208607 (S1 Table)",
+   "checked": "2026-11-08 (CrossRef)"
+  },
+  "Porter1984": {
+   "doi": "10.1098/rspb.1984.0057",
+   "title": "Primary production and photoadaptation in light- and shade-adapted colonies of the symbiotic coral,\n                    <i>stylophora pistillata</i>",
+   "year": 1984,
+   "authors": [
+    "Porter JW",
+    "Muscatine L",
+    "Dubinsky Z",
+    "Falkowski PG"
+   ],
+   "journal": "Proceedings of the Royal Society of London. Series B. Biological Sciences",
+   "cite": "Porter JW, Muscatine L, Dubinsky Z, Falkowski PG (1984) Primary production and photoadaptation in light- and shade-adapted colonies of the symbiotic coral, Stylophora pistillata. Proc R Soc Lond B 222:161-180",
+   "checked": "2026-11-08 (CrossRef)"
+  },
+  "Mass2007": {
+   "doi": "10.3354/meps334093",
+   "title": "Photoacclimation of Stylophora pistillata to light extremes: metabolism and calcification",
+   "year": 2007,
+   "authors": [
+    "Mass T",
+    "Einbinder S",
+    "Brokovich E",
+    "Shashar N"
+   ],
+   "journal": "Marine Ecology Progress Series",
+   "cite": "Mass T, Einbinder S, Brokovich E, Shashar N, Vago R, Erez J, Dubinsky Z (2007) Photoacclimation of Stylophora pistillata to light extremes: metabolism and calcification. Mar Ecol Prog Ser 334:93-102",
+   "checked": "2026-11-08 (CrossRef)"
+  },
+  "Sawall2014": {
+   "doi": "10.1371/journal.pone.0103179",
+   "title": "Spatio-Temporal Analyses of Symbiodinium Physiology of the Coral Pocillopora verrucosa along Large-Scale Nutrient and Temperature Gradients in the Red Sea",
+   "year": 2014,
+   "authors": [
+    "Sawall Y",
+    "Al-Sofyani A",
+    "Banguera-Hinestroza E",
+    "Voolstra CR"
+   ],
+   "journal": "PLoS ONE",
+   "cite": "Sawall Y, Al-Sofyani A, Banguera-Hinestroza E, Voolstra CR (2014) Spatio-temporal analyses of Symbiodinium physiology of the coral Pocillopora verrucosa along large-scale nutrient and temperature gradients in the Red Sea. PLoS ONE 9:e103179",
+   "checked": "2026-11-08 (CrossRef)"
+  },
+  "Davies1991": {
+   "doi": "10.1007/BF01313481",
+   "title": "Effect of daylight variations on the energy budgets of shallow-water corals",
+   "year": 1991,
+   "authors": [
+    "Davies PS"
+   ],
+   "journal": "Marine Biology",
+   "cite": "Davies PS (1991) Effect of daylight variations on the energy budgets of shallow-water corals. Mar Biol 108:137-144",
+   "checked": "2026-11-08 (CrossRef)"
+  },
+  "Chalker1981": {
+   "doi": "10.1007/BF00406821",
+   "title": "Simulating light-saturation curves for photosynthesis and calcification by reef-building corals",
+   "year": 1981,
+   "authors": [
+    "Chalker BE"
+   ],
+   "journal": "Marine Biology",
+   "cite": "Chalker BE (1981) Simulating light-saturation curves for photosynthesis and calcification by reef-building corals. Mar Biol 63:135-141",
+   "checked": "2026-11-08 (CrossRef)"
+  },
+  "Porter1980": {
+   "doi": "10.1007/978-1-4684-3890-1_22",
+   "title": "Primary Productivity in the Sea: Reef Corals in Situ",
+   "year": 1980,
+   "authors": [
+    "Porter JW"
+   ],
+   "journal": "Primary Productivity in the Sea",
+   "cite": "Porter JW (1980) Primary productivity in the sea: reef corals in situ. In: Falkowski PG (ed) Primary Productivity in the Sea. Plenum, New York, pp 403-410",
+   "checked": "2026-11-08 (CrossRef)"
+  },
+  "Lesser1994": {
+   "doi": "10.1016/0022-0981(94)90034-5",
+   "title": "Effects of morphology and water motion on carbon delivery and productivity in the reef coral, Pocillopora damicornis (Linnaeus): Diffusion barriers, inorganic carbon limitation, and biochemical plasticity",
+   "year": 1994,
+   "authors": [
+    "Lesser MP",
+    "Weis VM",
+    "Patterson MR",
+    "Jokiel PL"
+   ],
+   "journal": "Journal of Experimental Marine Biology and Ecology",
+   "cite": "Lesser MP, Weis VM, Patterson MR, Jokiel PL (1994) Effects of morphology and water motion on carbon delivery and productivity in the reef coral, Pocillopora damicornis (Linnaeus). J Exp Mar Biol Ecol 178:153-179",
+   "checked": "2026-11-08 (CrossRef)"
+  },
+  "Madin2016": {
+   "doi": "10.1038/sdata.2016.17",
+   "title": "The Coral Trait Database, a curated database of trait information for coral species from the global oceans",
+   "year": 2016,
+   "authors": [
+    "Madin JS",
+    "Anderson KD",
+    "Andreasen MH",
+    "Bridge TC"
+   ],
+   "journal": "Scientific Data",
+   "cite": "Madin JS, et al. (2016) The Coral Trait Database, a curated database of trait information for coral species from the global oceans. Sci Data 3:160017",
+   "checked": "2026-11-08 (CrossRef)"
+  },
+  "Edmunds2014": {
+   "doi": "10.1007/s00227-014-2547-y",
+   "title": "Evaluating the causal basis of ecological success within the scleractinia: an integral projection model approach",
+   "year": 2014,
+   "authors": [
+    "Edmunds PJ",
+    "Burgess SC",
+    "Putnam HM",
+    "Baskett ML"
+   ],
+   "journal": "Marine Biology",
+   "cite": "Edmunds PJ, et al. (2014) Evaluating the causal basis of ecological success within the scleractinia: an integral projection model approach. Mar Biol 161:2719-2734 (compilation of respiration and gross photosynthesis, via the Coral Trait Database)",
+   "checked": "2026-11-08 (CrossRef)"
+  },
+  "Jassby1976": {
+   "doi": "10.4319/lo.1976.21.4.0540",
+   "title": "Mathematical formulation of the relationship between photosynthesis and light for phytoplankton",
+   "year": 1976,
+   "authors": [
+    "Jassby AD",
+    "Platt T"
+   ],
+   "journal": "Limnology and Oceanography",
+   "cite": "Jassby AD, Platt T (1976) Mathematical formulation of the relationship between photosynthesis and light for phytoplankton. Limnol Oceanogr 21:540-547",
+   "checked": "2026-11-08 (CrossRef)"
+  },
+  "Anthony2003": {
+   "doi": "10.1007/s00442-002-1095-1",
+   "title": "Kinetics of photoacclimation in corals",
+   "year": 2003,
+   "authors": [
+    "Anthony K",
+    "Hoegh-Guldberg O"
+   ],
+   "journal": "Oecologia",
+   "cite": "Anthony KRN, Hoegh-Guldberg O (2003) Kinetics of photoacclimation in corals. Oecologia 134:23-31",
+   "checked": "2026-11-08 (CrossRef)"
+  },
+  "Falkowski1981": {
+   "doi": "10.1038/289172a0",
+   "title": "Light-shade adaptation of Stylophora pistillata, a hermatypic coral from the Gulf of Eilat",
+   "year": 1981,
+   "authors": [
+    "Falkowski PG",
+    "Dubinsky Z"
+   ],
+   "journal": "Nature",
+   "cite": "Falkowski PG, Dubinsky Z (1981) Light-shade adaptation of Stylophora pistillata, a hermatypic coral from the Gulf of Eilat. Nature 289:172-174",
+   "checked": "2026-11-08 (CrossRef)"
+  },
+  "QuanFry1995": {
+   "doi": "10.1364/AO.34.003477",
+   "title": "Empirical equation for the index of refraction of seawater",
+   "year": 1995,
+   "authors": [
+    "Quan",
+    "Fry"
+   ],
+   "journal": "Applied Optics",
+   "volume": "34",
+   "pages": "3477",
+   "checked": "2026-11-08 (CrossRef)"
+  },
+  "MontebonYap1995": {
+   "doi": "10.1016/0022-0981(95)00150-P",
+   "title": "Metabolic responses of the scleractinian coral Porites cylindrica Dana to water motion. I. Oxygen flux studies",
+   "year": 1995,
+   "authors": [
+    "Montebon",
+    "Yap"
+   ],
+   "journal": "Journal of Experimental Marine Biology and Ecology",
+   "volume": "186",
+   "pages": "33-52",
+   "checked": "2026-11-08 (CrossRef)",
+   "note": "CrossRef lists the first author as 'Rex A, Montebon F'; the author is Augustus Rex F. Montebon."
+  },
+  "Haurwitz1945": {
+   "doi": "10.1175/1520-0469(1945)002<0154:IIRTCA>2.0.CO;2",
+   "title": "Insolation in relation to cloudiness and cloud density",
+   "year": 1945,
+   "authors": [
+    "Haurwitz"
+   ],
+   "journal": "Journal of Meteorology",
+   "checked": "2026-11-09 (CrossRef)"
+  },
+  "Reno2012": {
+   "doi": "10.2172/1039404",
+   "title": "Global Horizontal Irradiance Clear Sky Models: Implementation and Analysis",
+   "year": 2012,
+   "authors": [
+    "Reno",
+    "Hansen",
+    "Stein"
+   ],
+   "journal": "Sandia National Laboratories report SAND2012-2389",
+   "checked": "2026-11-09 (CrossRef)"
+  }
+ }
+}

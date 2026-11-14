@@ -1,0 +1,518 @@
+{
+ "version": 1,
+ "description": "Coral photosynthesis–irradiance presets for the Coral Shading Protocol. Ek in µmol photons m-2 s-1 (PAR).",
+ "model": {
+  "equation": "P_gross(E) = Pmax * tanh(E / Ek)  (Jassby & Platt 1976); P_net = P_gross - R",
+  "photoacclimation": "Optional: Ek_acclimated = (Ek/Emax of the source) x peak daily irradiance at the coral (Falkowski & Dubinsky 1981; Anthony & Hoegh-Guldberg 2003; Sawall & Hochberg 2018)",
+  "references": [
+   "Jassby1976",
+   "Anthony2003",
+   "Falkowski1981",
+   "SH2018"
+  ]
+ },
+ "presets": [
+  {
+   "id": "typical",
+   "label": "Typical shallow coral (default)",
+   "species": null,
+   "Ek": 234,
+   "Ek_range": [
+    176,
+    273
+   ],
+   "Ek_basis": "Median (interquartile range) of 26 published in situ or field-fresh coral P–E curves from 1–12 m compiled by Sawall & Hochberg (2018)",
+   "Ek_Emax": 0.326,
+   "R_over_Pg": 0.33,
+   "R_over_Pg_basis": "Middle of the same-study ratios below (0.25–0.41)",
+   "sources": [
+    "SH2018"
+   ],
+   "status": "derived",
+   "Ek_Emax_basis": "Median Ek/Emax of the same 26 curves (Sawall & Hochberg 2018, S1 Table column Ek/Emax)"
+  },
+  {
+   "id": "stylophora_pistillata",
+   "label": "Stylophora pistillata",
+   "species": "Stylophora pistillata",
+   "Ek": 273,
+   "Ek_range": [
+    121,
+    273
+   ],
+   "Ek_basis": "Light-adapted colonies, 2 m, Eilat (Porter et al. 1984); 5 m winter 121 and summer 233 (Mass et al. 2007), as compiled by Sawall & Hochberg (2018)",
+   "Ek_Emax": 0.471,
+   "Emax": 580,
+   "Pmax": {
+    "value": 1.222,
+    "unit": "umol O2 cm-2 h-1",
+    "kind": "net"
+   },
+   "R_over_Pg": null,
+   "notes": "Mass et al. (2007) give Ek values of 1084.5 (summer) and 659.5 (winter) µmol m-2 s-1 at 5 m in their text; Sawall & Hochberg (2018) list these as the maximum irradiance and give Ek 233 and 121. The preset uses Porter et al. (1984).",
+   "sources": [
+    "Porter1984",
+    "Mass2007",
+    "SH2018"
+   ],
+   "status": "ok"
+  },
+  {
+   "id": "pocillopora_verrucosa",
+   "label": "Pocillopora verrucosa",
+   "species": "Pocillopora verrucosa",
+   "Ek": 233,
+   "Ek_range": [
+    152,
+    343
+   ],
+   "Ek_values": [
+    151.7,
+    220.2,
+    153.3,
+    285.2,
+    342.7,
+    176.9,
+    237.5,
+    235.6,
+    259.6,
+    276.1,
+    181.9,
+    271.3
+   ],
+   "Ek_basis": "Mean (range) of 12 curves, 5 m, six Red Sea sites in summer and winter (Sawall et al. 2014), as compiled by Sawall & Hochberg (2018)",
+   "Ek_Emax": 0.322,
+   "R_over_Pg": null,
+   "sources": [
+    "Sawall2014",
+    "SH2018"
+   ],
+   "status": "ok"
+  },
+  {
+   "id": "pocillopora_damicornis",
+   "label": "Pocillopora damicornis",
+   "species": "Pocillopora damicornis",
+   "Ek": 254,
+   "Ek_range": null,
+   "Ek_basis": "3 m, Kāneʻohe Bay, Hawaiʻi, gross photosynthesis (Davies 1991), as compiled by Sawall & Hochberg (2018)",
+   "Ek_Emax": 0.431,
+   "Emax": 590,
+   "R_over_Pg": 0.36,
+   "R_over_Pg_basis": "Lesser et al. (1994), 1.5 m, Kāneʻohe Bay, three water-motion levels: R/Pg = 0.95/2.6, 1.8/5.7, 3.6/9.1 (Coral Trait Database)",
+   "sources": [
+    "Davies1991",
+    "SH2018",
+    "Lesser1994",
+    "Madin2016",
+    "Edmunds2014"
+   ],
+   "status": "ok"
+  },
+  {
+   "id": "porites_lobata",
+   "label": "Porites lobata",
+   "species": "Porites lobata",
+   "Ek": 177,
+   "Ek_range": null,
+   "Ek_basis": "3 m, Kāneʻohe Bay, Hawaiʻi, gross photosynthesis (Davies 1991), as compiled by Sawall & Hochberg (2018)",
+   "Ek_Emax": 0.3,
+   "Emax": 590,
+   "R_over_Pg": null,
+   "sources": [
+    "Davies1991",
+    "SH2018"
+   ],
+   "status": "ok"
+  },
+  {
+   "id": "acropora_cervicornis",
+   "label": "Acropora cervicornis",
+   "species": "Acropora cervicornis",
+   "Ek": 236,
+   "Ek_range": null,
+   "Ek_basis": "12 m, Bahamas, gross photosynthesis (Chalker 1981), as compiled by Sawall & Hochberg (2018)",
+   "Ek_Emax": 0.634,
+   "Emax": 372,
+   "R_over_Pg": 0.29,
+   "R_over_Pg_basis": "Porter (1980), 10 m fore reef, Jamaica: R 0.38, Pg 1.31 µmol O2 cm-2 h-1 (Coral Trait Database); 1 m back reef, St. Croix gives 0.41 (Gladfelter et al. 1989)",
+   "sources": [
+    "Chalker1981",
+    "SH2018",
+    "Porter1980",
+    "Madin2016",
+    "Edmunds2014"
+   ],
+   "status": "ok"
+  },
+  {
+   "id": "porites_cylindrica",
+   "label": "Porites cylindrica",
+   "species": "Porites cylindrica",
+   "Ek": 1062,
+   "Ek_range": [
+    968,
+    1307
+   ],
+   "Ek_basis": "Nubbins kept 71 days at the collection site (semi-protected reef flat, northwestern Philippines); hyperbolic-tangent fit (Chalker et al. 1983) per surface area at 28 °C, curves measured to about 1400 µmol m-2 s-1. Range: nubbins kept 77 days in laboratory aquaria at high and low water motion (maximum light 1000–1400 µmol m-2 s-1). Montebon & Yap (1995), Table 2.",
+   "Ek_Emax": null,
+   "R_over_Pg": 0.19,
+   "R_over_Pg_basis": "Same curves, field controls: R 0.90 / Pmax 4.78 per area (0.19 also per chlorophyll a and per protein); Montebon & Yap (1995), Table 2.",
+   "notes": "High-light reef-flat corals. Ek lies near the top of the measured light range, so it is loosely constrained. The growth light of the field controls was not reported, so Ek is used as measured (no photoacclimation). Use with care.",
+   "sources": [
+    "MontebonYap1995"
+   ],
+   "status": "caution"
+  }
+ ],
+ "excluded": [
+  {
+   "species": "Acropora palmata",
+   "reason": "P–E curves exist (Gomez-Campo et al. 2024, Mol Ecol 33:e17246; 2–3 m, Mexican Caribbean), but Ek is not reported: Pmax and the initial slope are shown only as box plots (Fig. 1) and the data are said to be in Appendix S1, not obtained. The ratio of the upper-surface medians gives Ek ≈ 390 µmol m-2 s-1 (box limits 290–590), too uncertain for a preset. Gross photosynthesis and respiration without Ek in Bythell (1988) and Gladfelter et al. (1989)."
+  },
+  {
+   "species": "Acropora hyacinthus",
+   "reason": "No oxygen P–E curve with Ek found."
+  },
+  {
+   "species": "Acropora tenuis",
+   "reason": "Only respiration–temperature data found (no P–E curve)."
+  },
+  {
+   "species": "Acropora muricata (formosa)",
+   "reason": "The only curve (Chalker 1981, 6 m, Magnetic Island, as compiled by Sawall & Hochberg 2018) gives Ek 55 with Ek/Emax 0.07, far below other shallow corals (0.2–0.5); under any shading it makes the coral look light-saturated nearly all day. Not checked against the original (closed access). Removed from the presets on 8 Nov 2026; restore if the original confirms it.",
+   "former_preset": {
+    "id": "acropora_muricata",
+    "label": "Acropora muricata (formosa)",
+    "species": "Acropora muricata",
+    "Ek": 55,
+    "Ek_range": null,
+    "Ek_basis": "6 m, Magnetic Island (turbid inshore GBR), gross photosynthesis (Chalker 1981, as A. formosa), as compiled by Sawall & Hochberg (2018)",
+    "Ek_Emax": 0.071,
+    "Emax": 779,
+    "R_over_Pg": null,
+    "notes": "Unusually low Ek for a shallow Acropora (Ek/Emax 0.07; most corals 0.2–0.5). Not checked against the original (closed access). Use with care.",
+    "sources": [
+     "Chalker1981",
+     "SH2018"
+    ],
+    "status": "caution"
+   }
+  }
+ ],
+ "references": {
+  "SH2018": {
+   "cite": "Sawall Y, Hochberg EJ (2018) Diel versus time-integrated (daily) photosynthesis and irradiance relationships of coral reef organisms and communities. PLoS ONE 13:e0208607 (S1 Table)",
+   "doi": "10.1371/journal.pone.0208607",
+   "crossref": {
+    "authors": [
+     "Sawall Y",
+     "Hochberg EJ"
+    ],
+    "year": 2018,
+    "title": "Diel versus time-integrated (daily) photosynthesis and irradiance relationships of coral reef organisms and communities",
+    "journal": "PLOS ONE",
+    "volume": "13",
+    "issue": "12",
+    "page": "e0208607",
+    "article": null,
+    "type": "journal-article",
+    "checked": "2026-11-08"
+   }
+  },
+  "Porter1984": {
+   "cite": "Porter JW, Muscatine L, Dubinsky Z, Falkowski PG (1984) Primary production and photoadaptation in light- and shade-adapted colonies of the symbiotic coral, Stylophora pistillata. Proc R Soc Lond B 222:161-180",
+   "doi": "10.1098/rspb.1984.0057",
+   "crossref": {
+    "authors": [
+     "Porter JW",
+     "Muscatine L",
+     "Dubinsky Z",
+     "Falkowski PG"
+    ],
+    "year": 1984,
+    "title": "Primary production and photoadaptation in light- and shade-adapted colonies of the symbiotic coral,\n                    <i>stylophora pistillata</i>",
+    "journal": "Proceedings of the Royal Society of London. Series B. Biological Sciences",
+    "volume": "222",
+    "issue": "1227",
+    "page": "161-180",
+    "article": null,
+    "type": "journal-article",
+    "checked": "2026-11-08"
+   }
+  },
+  "Mass2007": {
+   "cite": "Mass T, Einbinder S, Brokovich E, Shashar N, Vago R, Erez J, Dubinsky Z (2007) Photoacclimation of Stylophora pistillata to light extremes: metabolism and calcification. Mar Ecol Prog Ser 334:93-102",
+   "doi": "10.3354/meps334093",
+   "crossref": {
+    "authors": [
+     "Mass T",
+     "Einbinder S",
+     "Brokovich E",
+     "Shashar N",
+     "Vago R",
+     "Erez J",
+     "Dubinsky Z"
+    ],
+    "year": 2007,
+    "title": "Photoacclimation of Stylophora pistillata to light extremes: metabolism and calcification",
+    "journal": "Marine Ecology Progress Series",
+    "volume": "334",
+    "issue": null,
+    "page": "93-102",
+    "article": null,
+    "type": "journal-article",
+    "checked": "2026-11-08"
+   }
+  },
+  "Sawall2014": {
+   "cite": "Sawall Y, Al-Sofyani A, Banguera-Hinestroza E, Voolstra CR (2014) Spatio-temporal analyses of Symbiodinium physiology of the coral Pocillopora verrucosa along large-scale nutrient and temperature gradients in the Red Sea. PLoS ONE 9:e103179",
+   "doi": "10.1371/journal.pone.0103179",
+   "crossref": {
+    "authors": [
+     "Sawall Y",
+     "Al-Sofyani A",
+     "Banguera-Hinestroza E",
+     "Voolstra CR"
+    ],
+    "year": 2014,
+    "title": "Spatio-Temporal Analyses of Symbiodinium Physiology of the Coral Pocillopora verrucosa along Large-Scale Nutrient and Temperature Gradients in the Red Sea",
+    "journal": "PLoS ONE",
+    "volume": "9",
+    "issue": "8",
+    "page": "e103179",
+    "article": null,
+    "type": "journal-article",
+    "checked": "2026-11-08"
+   }
+  },
+  "Davies1991": {
+   "cite": "Davies PS (1991) Effect of daylight variations on the energy budgets of shallow-water corals. Mar Biol 108:137-144",
+   "doi": "10.1007/BF01313481",
+   "crossref": {
+    "authors": [
+     "Davies PS"
+    ],
+    "year": 1991,
+    "title": "Effect of daylight variations on the energy budgets of shallow-water corals",
+    "journal": "Marine Biology",
+    "volume": "108",
+    "issue": "1",
+    "page": "137-144",
+    "article": null,
+    "type": "journal-article",
+    "checked": "2026-11-08"
+   }
+  },
+  "Chalker1981": {
+   "cite": "Chalker BE (1981) Simulating light-saturation curves for photosynthesis and calcification by reef-building corals. Mar Biol 63:135-141",
+   "doi": "10.1007/BF00406821",
+   "crossref": {
+    "authors": [
+     "Chalker BE"
+    ],
+    "year": 1981,
+    "title": "Simulating light-saturation curves for photosynthesis and calcification by reef-building corals",
+    "journal": "Marine Biology",
+    "volume": "63",
+    "issue": "2",
+    "page": "135-141",
+    "article": null,
+    "type": "journal-article",
+    "checked": "2026-11-08"
+   }
+  },
+  "Porter1980": {
+   "cite": "Porter JW (1980) Primary productivity in the sea: reef corals in situ. In: Falkowski PG (ed) Primary Productivity in the Sea. Plenum, New York, pp 403-410",
+   "doi": "10.1007/978-1-4684-3890-1_22",
+   "crossref": {
+    "authors": [
+     "Porter JW"
+    ],
+    "year": 1980,
+    "title": "Primary Productivity in the Sea: Reef Corals in Situ",
+    "journal": "Primary Productivity in the Sea",
+    "volume": null,
+    "issue": null,
+    "page": "403-410",
+    "article": null,
+    "type": "book-chapter",
+    "checked": "2026-11-08"
+   }
+  },
+  "Lesser1994": {
+   "cite": "Lesser MP, Weis VM, Patterson MR, Jokiel PL (1994) Effects of morphology and water motion on carbon delivery and productivity in the reef coral, Pocillopora damicornis (Linnaeus). J Exp Mar Biol Ecol 178:153-179",
+   "doi": "10.1016/0022-0981(94)90034-5",
+   "crossref": {
+    "authors": [
+     "Lesser MP",
+     "Weis VM",
+     "Patterson MR",
+     "Jokiel PL"
+    ],
+    "year": 1994,
+    "title": "Effects of morphology and water motion on carbon delivery and productivity in the reef coral, Pocillopora damicornis (Linnaeus): Diffusion barriers, inorganic carbon limitation, and biochemical plasticity",
+    "journal": "Journal of Experimental Marine Biology and Ecology",
+    "volume": "178",
+    "issue": "2",
+    "page": "153-179",
+    "article": null,
+    "type": "journal-article",
+    "checked": "2026-11-08"
+   }
+  },
+  "Madin2016": {
+   "cite": "Madin JS, et al. (2016) The Coral Trait Database, a curated database of trait information for coral species from the global oceans. Sci Data 3:160017",
+   "doi": "10.1038/sdata.2016.17",
+   "crossref": {
+    "authors": [
+     "Madin JS",
+     "Anderson KD",
+     "Andreasen MH",
+     "Bridge TC",
+     "Cairns SD",
+     "Connolly SR",
+     "Darling ES",
+     "Diaz M",
+     "Falster DS",
+     "Franklin EC",
+     "Gates RD",
+     "Harmer AM",
+     "Hoogenboom MO",
+     "Huang D",
+     "Keith SA",
+     "Kosnik MA",
+     "Kuo CY",
+     "Lough JM",
+     "Lovelock CE",
+     "Luiz O",
+     "Martinelli J",
+     "Mizerek T",
+     "Pandolfi JM",
+     "Pochon X",
+     "Pratchett MS",
+     "Putnam HM",
+     "Roberts TE",
+     "Stat M",
+     "Wallace CC",
+     "Widman E",
+     "Baird AH"
+    ],
+    "year": 2016,
+    "title": "The Coral Trait Database, a curated database of trait information for coral species from the global oceans",
+    "journal": "Scientific Data",
+    "volume": "3",
+    "issue": "1",
+    "page": null,
+    "article": "160017",
+    "type": "journal-article",
+    "checked": "2026-11-08"
+   }
+  },
+  "Edmunds2014": {
+   "cite": "Edmunds PJ, et al. (2014) Evaluating the causal basis of ecological success within the scleractinia: an integral projection model approach. Mar Biol 161:2719-2734 (compilation of respiration and gross photosynthesis, via the Coral Trait Database)",
+   "doi": "10.1007/s00227-014-2547-y",
+   "crossref": {
+    "authors": [
+     "Edmunds PJ",
+     "Burgess SC",
+     "Putnam HM",
+     "Baskett ML",
+     "Bramanti L",
+     "Fabina NS",
+     "Han X",
+     "Lesser MP",
+     "Madin JS",
+     "Wall CB",
+     "Yost DM",
+     "Gates RD"
+    ],
+    "year": 2014,
+    "title": "Evaluating the causal basis of ecological success within the scleractinia: an integral projection model approach",
+    "journal": "Marine Biology",
+    "volume": "161",
+    "issue": "12",
+    "page": "2719-2734",
+    "article": null,
+    "type": "journal-article",
+    "checked": "2026-11-08"
+   }
+  },
+  "Jassby1976": {
+   "cite": "Jassby AD, Platt T (1976) Mathematical formulation of the relationship between photosynthesis and light for phytoplankton. Limnol Oceanogr 21:540-547",
+   "doi": "10.4319/lo.1976.21.4.0540",
+   "crossref": {
+    "authors": [
+     "Jassby AD",
+     "Platt T"
+    ],
+    "year": 1976,
+    "title": "Mathematical formulation of the relationship between photosynthesis and light for phytoplankton",
+    "journal": "Limnology and Oceanography",
+    "volume": "21",
+    "issue": "4",
+    "page": "540-547",
+    "article": null,
+    "type": "journal-article",
+    "checked": "2026-11-08"
+   }
+  },
+  "Anthony2003": {
+   "cite": "Anthony KRN, Hoegh-Guldberg O (2003) Kinetics of photoacclimation in corals. Oecologia 134:23-31",
+   "doi": "10.1007/s00442-002-1095-1",
+   "crossref": {
+    "authors": [
+     "Anthony K",
+     "Hoegh-Guldberg O"
+    ],
+    "year": 2003,
+    "title": "Kinetics of photoacclimation in corals",
+    "journal": "Oecologia",
+    "volume": "134",
+    "issue": "1",
+    "page": "23-31",
+    "article": null,
+    "type": "journal-article",
+    "checked": "2026-11-08"
+   }
+  },
+  "Falkowski1981": {
+   "cite": "Falkowski PG, Dubinsky Z (1981) Light-shade adaptation of Stylophora pistillata, a hermatypic coral from the Gulf of Eilat. Nature 289:172-174",
+   "doi": "10.1038/289172a0",
+   "crossref": {
+    "authors": [
+     "Falkowski PG",
+     "Dubinsky Z"
+    ],
+    "year": 1981,
+    "title": "Light-shade adaptation of Stylophora pistillata, a hermatypic coral from the Gulf of Eilat",
+    "journal": "Nature",
+    "volume": "289",
+    "issue": "5794",
+    "page": "172-174",
+    "article": null,
+    "type": "journal-article",
+    "checked": "2026-11-08"
+   }
+  },
+  "MontebonYap1995": {
+   "cite": "Montebon ARF, Yap HT (1995) Metabolic responses of the scleractinian coral Porites cylindrica Dana to water motion. I. Oxygen flux studies. J Exp Mar Biol Ecol 186:33-52",
+   "doi": "10.1016/0022-0981(95)00150-P",
+   "crossref": {
+    "authors": [
+     "Rex A",
+     "Montebon F",
+     "Yap HT"
+    ],
+    "year": 1995,
+    "title": "Metabolic responses of the scleractinian coral Porites cylindrica Dana to water motion. I. Oxygen flux studies",
+    "journal": "Journal of Experimental Marine Biology and Ecology",
+    "volume": "186",
+    "page": "33-52",
+    "type": "journal-article",
+    "checked": "2026-11-08",
+    "note": "CrossRef splits the first author's name; the author is Augustus Rex F. Montebon."
+   }
+  }
+ }
+}

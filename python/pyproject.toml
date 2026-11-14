@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "coral-shading-protocol"
+version = "5.0.0"
+description = "Light under coral shading structures: shade cloth and opaque canopies"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [{name = "Graham Patterson"}]
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.22"]
+
+[project.scripts]
+coralshading = "coralshading.cli:main"
+
+[project.urls]
+Source = "https://github.com/grahamhp/coral-shading-protocol"
+App = "https://grahamhp.github.io/coral-shading-protocol/"
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+coralshading = ["data/**/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
