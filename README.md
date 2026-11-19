@@ -1,4 +1,4 @@
-# Coral Shading Protocol v5
+# Coral Shading Protocol v5.1
 
 A design tool for shading corals during heat stress. It sizes a shade cloth (constant shading) or an opaque
 canopy that shades the corals only around midday (dynamic shading), and shows the light the corals receive
@@ -22,14 +22,17 @@ with sources). The app shows:
 - daily light (mol m⁻² d⁻¹) under each and in open water, as maps and curves through the day;
 - light at noon and in the morning and afternoon, hours with the sun in line, light reduction and the coral's
   expected photosynthesis and P:R;
+- the likely range of every result, from how strongly the water scatters light sideways (ω₀, rarely measured);
 - how much the result changes with water clarity, water scattering, wind and the structure's position.
 
-Simple mode asks for the essentials; expert mode adds water scattering, clean and fouled cloth, independent
-cloth and canopy targets, set structure sizes, wind, grid spacing and coral parameters. Both modes let you set
+Simple mode asks for the essentials; expert mode adds water scattering and its range (or ω₀ fitted from one
+reading under an opaque board), water clarity by date, a tide record, cloth fouling and cleaning over time,
+independent cloth and canopy targets, set structure sizes, wind, grid spacing and coral parameters. Both modes let you set
 solar noon. A first answer
 appears in about 0.2 s; the full result follows in a few seconds. Results export as CSV and JSON.
 
-Light data: the Sipaway example is built in. For other sites the app opens the PVGIS download for the site (a
+Light data: one example site (Sipaway Island, Philippines; PVGIS typical year) is built in so the app works
+offline. For other sites the app opens the PVGIS download for the site (a
 typical year or real years); load the saved file or paste its text. PVGIS does not allow web pages to fetch
 its data directly, so this takes one extra click.
 
@@ -39,6 +42,8 @@ its data directly, so this takes one extra click.
 pip install ./python
 coralshading design --lat 10.4675 --lon 123.4506 --tz 8 --start 2025-04-28 --end 2025-08-08 \
     --target reef_star --depth 10 --height 0.75 --kd 0.21 --light tmy --out results/
+# options: --w0 0.7 --w0-range 0.5-0.9 | --w0-reading RATIO LX LY HEIGHT --reading-time "2025-05-22 12:00" --reading-err 0.02
+#          --kd-series kd.csv --tide tide.csv --fouling 0.2 0.12 30 21 --acclimate time
 ```
 
 ```python
@@ -70,8 +75,9 @@ independent 3-D Monte Carlo: [docs/validation.md](docs/validation.md). Design ch
 - **v4.2** (tag `v4.2`, commit `f3c2957a`): last version before v5. Attenuates direct and diffuse light
   vertically with one Kd. Still available at https://grahamhp.github.io/coral-shading-protocol/v4.2/.
 - **v5.0** (tag `v5.0.0`): rebuilt on radiative transfer. See [CHANGELOG.md](CHANGELOG.md).
-- **v5.1**: every day in every calculation, light at noon versus morning and afternoon, the sun beam's share of
-  the light, and the assumptions stated on every export. See [CHANGELOG.md](CHANGELOG.md).
+- **v5.1**: every day in every calculation; ω₀ range on every result and ω₀ from a field reading; water clarity
+  by date, tide, cloth fouling over time and coral acclimation over time; circumsolar sky light; light at noon
+  versus morning and afternoon; the assumptions stated on every export. See [CHANGELOG.md](CHANGELOG.md).
 
 ## Repository
 

@@ -78,7 +78,7 @@ class DesignResult:
         i = self.inputs
         lines = [f"Coral Shading Protocol {__version__}",
                  f"Site {i['lat']:.4f}, {i['lon']:.4f} (UTC{i['tz']:+g}); {'%d-%02d-%02d' % i['start']} to {'%d-%02d-%02d' % i['end']}; corals at {i['depth']} m; "
-                 f"structures {i['height']} m above; Kd {i['kd']} m-1, w0 {i['w0']} (range {i['w0_range'][0]:g}-{i['w0_range'][1]:g}); "
+                 f"structures {i['height']} m above; Kd {i['kd']} m-1, w0 {i['w0']:g} (range {i['w0_range'][0]:g}-{i['w0_range'][1]:g}); "
                  f"light: {i['light']}"]
         lines += [f"WARNING: {w}" for w in self.warnings]
         p0 = self.scenarios[0].period

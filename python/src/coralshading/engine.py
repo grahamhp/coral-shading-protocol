@@ -67,7 +67,7 @@ def _interp_w0_tau(arr_w0_tau, t, w0, tau):
 @dataclass
 class Water:
     kd: float = 0.10       # m-1
-    w0: float = 0.90       # single-scattering albedo of the water (PAR band)
+    w0: float = 0.70       # single-scattering albedo of the water (PAR band); design value, see docs/methods.md 6
     depth: float = 10.0    # m, depth of the target plane below the surface
 
 

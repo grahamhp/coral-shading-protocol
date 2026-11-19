@@ -27,8 +27,11 @@ def main(argv=None) -> int:
     p.add_argument("--w0", type=float, default=0.7, help="water scattering used for the design (0.3-0.95)")
     p.add_argument("--w0-range", default="0.5-0.9", help="range of w0 shown with every result, LOW-HIGH")
     p.add_argument("--w0-reading", nargs=4, type=float, metavar=("RATIO", "LX", "LY", "HEIGHT"),
-                   help="field reading under an opaque panel at noon of the start date (light under / open water, panel size and "
-                        "height in m); sets w0 and prints it")
+                   help="field reading under an opaque board, read at its center (light under / open water, board size and "
+                        "height above the sensor in m); sets w0 (and, with --reading-err, the w0 range) and prints it")
+    p.add_argument("--reading-time", help="local date and time of the reading, 'YYYY-MM-DD HH:MM' (default: solar noon of --start)")
+    p.add_argument("--reading-diffuse", type=float, default=0.3, help="diffuse share of PAR above the water at the reading (default 0.3)")
+    p.add_argument("--reading-err", type=float, default=0.0, help="uncertainty of the reading ratio (same units as RATIO)")
     p.add_argument("--kd-series", help="CSV of 'date, Kd' through the deployment")
     p.add_argument("--tide", help="CSV of 'local date time, water level (m)' covering the deployment")
     p.add_argument("--fouling", nargs=4, type=float, metavar=("TAU_CLEAN", "TAU_FOULED", "DAYS_TO_FOUL", "CLEAN_EVERY"),
@@ -60,10 +63,19 @@ def main(argv=None) -> int:
     w0 = a.w0
     if a.w0_reading:
         ratio, lx, ly, h = a.w0_reading
-        noon = solar.solar_noon(*a.start, a.lon, tz)
-        cal = sc.w0_from_reading(ratio, Panel(lx=lx, ly=ly, height=h, tau=0.0), (0.0, 0.0), a.kd, a.depth, a.start, noon, a.lat, a.lon, tz)
-        w0 = cal["w0"]
-        print(f"w0 from the reading: {w0:.3f} ({cal['status']})")
+        if a.reading_time:
+            t = conditions._parse_datetime_min(a.reading_time)
+            rd = tuple(int(x) for x in a.reading_time.strip()[:10].split("-")); rmin = t - solar.days_from_civil(*rd) * 1440.0
+        else:
+            rd, rmin = a.start, solar.solar_noon(*a.start, a.lon, tz)
+        board = Panel(lx=lx, ly=ly, height=h, tau=0.0)
+        cal = lambda q: sc.w0_from_reading(max(q, 1e-4), board, (0.0, 0.0), a.kd, a.depth, rd, rmin, a.lat, a.lon, tz, diffuse_share=a.reading_diffuse)
+        mid = cal(ratio); w0 = round(mid["w0"], 3)
+        print(f"w0 from the reading: {w0:.3f} ({mid['status']}; the model gives {mid['ratio_min']:.3f}-{mid['ratio_max']:.3f} over the tables' w0)")
+        if a.reading_err > 0:
+            w_lo, w_hi = cal(ratio - a.reading_err)["w0"], cal(ratio + a.reading_err)["w0"]
+            lo, hi = round(min(w_lo, w_hi), 3), round(max(w_lo, w_hi), 3)
+            print(f"w0 range for the reading +/- {a.reading_err}: {lo:.3f}-{hi:.3f}")
     kds = conditions.kd_series_from_csv(open(a.kd_series, encoding="utf-8").read()) if a.kd_series else None
     tide = conditions.tide_from_csv(open(a.tide, encoding="utf-8").read()) if a.tide else None
     foul = None

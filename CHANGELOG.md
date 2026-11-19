@@ -4,6 +4,49 @@
 
 From a scientific review of v5.0.0 (19 Nov 2026). Designs are unchanged except where noted.
 
+**Water scattering (ω₀), for any site**
+
+- **Default ω₀ 0.7 with a range on every result.** v5.0 defaulted to 0.9, fitted to one site's canopy readings.
+  ω₀ is rarely measured and published values span most of its range (Petzold's waters 0.25–0.83; 0.1–0.9 from
+  absorption- to scattering-dominated water), so the design value is now 0.7, the middle of 0.5–0.9, and every
+  result is also computed at both ends with the same structure ("likely between … and …"). This changes designs:
+  with less scattering the shade is darker, so a canopy matched to a cloth is narrower and the light reaching the
+  corals is lower than at 0.9.
+- **ω₀ from a field reading.** The ratio of light under an opaque board to open water at the same depth, with
+  the board size and height, date, time and diffuse share, gives the ω₀ that reproduces it (bisection; the ratio
+  rises monotonically with ω₀), and its uncertainty gives the range. App: Expert → Water scattering from a field
+  reading. Python: `scenarios.w0_from_reading`; CLI `--w0-reading`, `--reading-time`, `--reading-diffuse`,
+  `--reading-err`. Field protocol section 1b.
+- **Light tables extended to ω₀ 0.3, 0.4 and 0.95** (same Monte Carlo settings), so readings from clearer or
+  more strongly scattering water can be fitted.
+- **Water presets** are published reef values only (clear 0.06, moderate 0.10, turbid inshore 0.45 m⁻¹); the
+  example site's own Kd is no longer a preset. Help texts no longer rely on one site.
+
+**Conditions that change through a deployment**
+
+- **Kd by date** (own readings or satellite products), interpolated day by day.
+- **Tide**: a water-level series sets the coral depth at every 10-minute step; the depth entered is the depth at
+  mean water level. A structure that reaches the surface at low tide is handled exactly.
+- **Cloth fouling over time** replaces the fixed share of time fouled in the app: transmission falls linearly from
+  clean to fully fouled over a set number of days after each cleaning (start date, every n days, extra dates).
+  Exact and no slower (light is linear in one panel's transmission). Python keeps the fixed share as well.
+- **Coral acclimation over time** (new default): Ek starts adjusted to open water at the coral depth and moves
+  each day toward the light under the structure with a 2.5-day time constant (Anthony & Hoegh-Guldberg 2003: new
+  stable Ek within 5–10 days).
+- Exports add `kd_m1`, `depth_at_noon_m` (with a tide) and `cloth_transmission` (with fouling) per day.
+
+**Sky light**
+
+- **Circumsolar light.** Part of the diffuse light now travels with the sun, by the hourly anisotropy index of
+  Hay & Davies (1980). In the example (Kd 0.10, ω₀ 0.7, 10 m) open-water daily light rises 1.3 %, light under the
+  80 % cloth falls from 25.4 to 25.0 % of open water, and the matching canopy is 2 cm narrower.
+
+**App**
+
+- Fixed a slowdown: after a few design runs V8 deoptimized the inner light loops (objects of several shapes reached
+  them) and the robustness stage took about 30 s instead of 3 s. Panels are now copied into one fixed shape first.
+- `npm test` runs the same command as CI.
+
 - **Every day, everywhere.** The canopy solver and the robustness table use every day of the deployment (v5.0
   used about 20 and 12 days). The canopy is solved on the reported grid, so the separate correction step is gone.
   At Sipaway the canopy width changes by 1.6 mm and the robustness values by at most 0.08 percentage points. Cost:

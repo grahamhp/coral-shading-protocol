@@ -236,3 +236,30 @@ alternative was. Items marked **[needs you]** are waiting on your approval or in
     insensitive (Kd × 0.5–1.5 at most 2.7 points; ±0.75 m depth under 0.3; real years 2014–2023 under 0.11),
     absolute daily light is not (satellite Kd near Sipaway, 10th to 90th percentile 0.089–0.141, spans about
     1.7-fold in light at 10 m). Every export now says so. Daily Kd and tide inputs are left for a decision.
+
+## 19 November 2026: designed for any site (v5.1.0, second part)
+
+54. **Default ω₀ back to 0.7, with the range on every result** (replaces 50; follows your instruction that nothing
+    should rest on one site). Published ω₀ spans 0.25 (Petzold's clear ocean) to 0.83 (turbid harbor), and
+    radiative-transfer work treats 0.1–0.9 as absorbing to scattering water; reef waters absorb and scatter more
+    than the ocean water next to them (Russell et al. 2019). One site's readings (Sipaway, 0.85–0.9) are one point
+    inside that span. 0.7 is the middle of 0.5–0.9; the ends are run on every day with the same structure and
+    shown as "likely between … and …". At Kd 0.21 and 10 m the sun beam carries 29 %, 10 % and 0.8 % of the light
+    at ω₀ 0.5, 0.7 and 0.9, so how much dynamic shading can differ from constant shading depends strongly on ω₀.
+    **[needs you]** confirm 0.7 (or choose another design value) before release.
+55. **ω₀ from one board reading.** Under ÷ open beneath a level opaque board is monotonic in ω₀ and computed for
+    the reading's own sun position and diffuse share, so one reading fits ω₀ and its spread gives the range.
+    A board, not the structure, so that the reading does not depend on the cloth's transmission or on the design.
+56. **Tables extended to ω₀ 0.3, 0.4, 0.95** so that clear-water and strongly scattering readings can be fitted
+    rather than clipped. Same photon numbers and seeds scheme as the shipped tables.
+57. **Kd by date, tide, fouling over time, acclimation over time** (left open in 53): each changes absolute daily
+    light and coral metrics more than design ratios. Kd by date keeps ω₀; the tide keeps the beam attenuation per
+    meter; fouling uses the exact linearity in one panel's transmission; acclimation uses a 2.5-day time constant
+    from Anthony & Hoegh-Guldberg (2003). The fixed share of time fouled stays in Python for v5.0 scripts.
+58. **Circumsolar sky (Hay & Davies 1980).** Isotropic sky light underestimated light near the sun's direction,
+    which a canopy blocks at midday. Effect in the example: cloth 25.4 → 25.0 % of open water, canopy 2 cm narrower.
+59. **Kept fixed, stated as a limit:** the particle phase function (backscatter ratio 0.0183). Reef particles can
+    backscatter about 3 % (Russell et al. 2019); this matters less under a structure than ω₀ and would need new
+    tables for every ω₀.
+60. **App speed fix.** V8 deoptimized the inner loops after a few runs because panels of several object shapes
+    reached them (robustness 30 s instead of 3 s); panels are now copied into one fixed shape first.

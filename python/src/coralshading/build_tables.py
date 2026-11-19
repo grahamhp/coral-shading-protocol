@@ -22,7 +22,9 @@ import numpy as np
 
 from . import SHARED, mc
 
-W0S = [0.5, 0.6, 0.7, 0.8, 0.9]
+W0S_V50 = [0.5, 0.6, 0.7, 0.8, 0.9]          # shipped in v5.0 (seeds from 1000)
+W0S_V51 = [0.3, 0.4, 0.95]                     # added in v5.1 (seeds from 7000; split runs in chunks of 20,000 photons for memory)
+W0S = sorted(W0S_V50 + W0S_V51)
 SUN_ZENITHS = [0.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 88.0]
 TAUS = [round(float(x), 5) for x in np.geomspace(0.05, 40.0, 24)]          # simulated optical depths
 _RATIO = (40.0 / 0.05) ** (1 / 23)
@@ -66,7 +68,8 @@ def fourier_from_bins(bins: np.ndarray) -> np.ndarray:
 def _run(args, split: bool = False):
     w0, source, sunz, n, seed = args
     t0 = time.time()
-    r = mc.forward_tables(w0, source, sunz, taus=TAUS, n_photons=n, seed=seed + (50_000 if split else 0), split=split)
+    chunk = 20_000 if (split and w0 in W0S_V51) else 100_000
+    r = mc.forward_tables(w0, source, sunz, taus=TAUS, n_photons=n, seed=seed + (50_000 if split else 0), split=split, chunk=chunk)
     bins = np.array(r["bins"])
     A = np.array([fourier_from_bins(bins[k]) for k in range(len(TAUS))])          # [tau, m, theta]
     beam = (np.array(r["unscattered"]) + np.array(r["cone"])) if source == "sun" else np.zeros(len(TAUS))
@@ -75,11 +78,12 @@ def _run(args, split: bool = False):
 
 def job_list(n_photons: int):
     jobs = []
-    seed = 1000
-    for w0 in W0S:
-        for sz in SUN_ZENITHS:
-            seed += 1; jobs.append((w0, "sun", sz, n_photons, seed))
-        seed += 1; jobs.append((w0, "sky", 0.0, n_photons, seed))
+    for start, grid in ((1000, W0S_V50), (7000, W0S_V51)):      # seeds as used for the shipped tables
+        seed = start
+        for w0 in grid:
+            for sz in SUN_ZENITHS:
+                seed += 1; jobs.append((w0, "sun", sz, n_photons, seed))
+            seed += 1; jobs.append((w0, "sky", 0.0, n_photons, seed))
     return jobs
 
 
