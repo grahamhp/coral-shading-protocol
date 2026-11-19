@@ -434,6 +434,37 @@
    ],
    "journal": "Sandia National Laboratories report SAND2012-2389",
    "checked": "2026-11-09 (CrossRef)"
+  },
+  "HayDavies1980": {
+   "doi": null,
+   "title": "Calculation of the solar radiation incident on an inclined surface",
+   "year": 1980,
+   "authors": [
+    "Hay JE",
+    "Davies JA"
+   ],
+   "journal": "In: Hay JE, Won TK (eds) Proceedings of the First Canadian Solar Radiation Data Workshop. Ministry of Supply and Services Canada, Toronto, pp 59-72"
+  },
+  "Mobley1994": {
+   "doi": null,
+   "title": "Light and Water: Radiative Transfer in Natural Waters",
+   "year": 1994,
+   "authors": [
+    "Mobley CD"
+   ],
+   "journal": "Academic Press, San Diego (ISBN 0-12-502750-8)"
+  },
+  "Russell2019": {
+   "doi": "10.3390/rs11151757",
+   "title": "Water Column Optical Properties of Pacific Coral Reefs Across Geomorphic Zones and in Comparison to Offshore Waters",
+   "year": 2019,
+   "authors": [
+    "Russell BJ",
+    "Dierssen HM",
+    "Hochberg EJ"
+   ],
+   "journal": "Remote Sensing 11(15): 1757",
+   "checked": "2026-11-19 (CrossRef)"
   }
  }
 }

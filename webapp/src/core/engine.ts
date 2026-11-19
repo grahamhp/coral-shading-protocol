@@ -91,6 +91,11 @@ export interface Moments { C: Float64Array[]; S: Float64Array[]; nPoints: number
 /** Azimuth integrals of the panels' transmission seen from each point (see Python panel_moments).
  * Loops run direction-major: for submerged panels the hit offset of a direction does not depend on the point,
  * so it is computed once and reused for every point (same arithmetic as the reference: x + (h*ux)/uz). */
+/** A panel copied into one fixed object shape, so the hot loops below see a single hidden class whatever
+ *  object the caller built (spread copies, solver output, parsed inputs). Without it V8 deoptimizes the loops
+ *  repeatedly and falls back to slow code after a few design runs. */
+const flatPanel = (p: Panel): Panel => ({ cx: +p.cx, cy: +p.cy, lx: +p.lx, ly: +p.ly, height: +p.height, tau: +p.tau, rotDeg: +(p.rotDeg ?? 0) });
+
 export function panelMoments(pts: Float64Array, panels: readonly Panel[], water: Water, thetaEdges: Float64Array, mMax = 4): Moments {
   const nP = pts.length / 2, nT = thetaEdges.length - 1;
   const C: Float64Array[] = [], S: Float64Array[] = [];
@@ -99,7 +104,8 @@ export function panelMoments(pts: Float64Array, panels: readonly Panel[], water:
   const phis = Float64Array.from({ length: N_PHI }, (_, j) => (j + 0.5) * dphi);
   const cosm: Float64Array[] = [], sinm: Float64Array[] = [];
   for (let m = 0; m <= mMax; m++) { cosm.push(phis.map((p) => Math.cos(m * p))); sinm.push(phis.map((p) => Math.sin(m * p))); }
-  const pc = panels.map((p) => ({ p, cr: Math.cos((p.rotDeg * Math.PI) / 180), sr: Math.sin((p.rotDeg * Math.PI) / 180), sub: p.height <= water.depth }));
+  const depth0 = +water.depth;
+  const pc = panels.map(flatPanel).map((p) => ({ p, cr: Math.cos((p.rotDeg * Math.PI) / 180), sr: Math.sin((p.rotDeg * Math.PI) / 180), sub: p.height <= depth0 }));
   const tr = new Float64Array(nP * N_PHI);
   for (let i = 0; i < nT; i++) {
     tr.fill(0);
@@ -129,7 +135,7 @@ export function panelMoments(pts: Float64Array, panels: readonly Panel[], water:
             const { p: pan, cr, sr, sub } = pc[q]!;
             let hx: number, hy: number, ok = true;
             if (sub) { hx = px + (pan.height * ux) / uz; hy = py + (pan.height * uy) / uz; }
-            else [hx, hy, ok] = rayHitXY(px, py, ux, uy, ct, pan.height, water.depth);
+            else [hx, hy, ok] = rayHitXY(px, py, ux, uy, ct, pan.height, depth0);
             if (!ok) continue;
             const dx = hx - pan.cx, dy = hy - pan.cy;
             const u = dx * cr - dy * sr, w = dx * sr + dy * cr;
@@ -215,22 +221,23 @@ export function runDay(day: DayLight, water: Water, panels: readonly Panel[], pt
   const Tsky = skyTransmittance();
   const Z = st.sunZeniths, nz = Z.length;
   const M = st.mMax;
-  const circ = day.parCircumsolarH;
+  const circ = day.parCircumsolarH ?? null;
+  const zen = day.zenith, azi = day.azimuth, pDir = day.parDirectH, pDif = day.parDiffuse, wnd = day.wind, depth0 = +water.depth;
   // per-panel constants for the inlined ray test
-  const pn = panels.map((p) => ({ p, cr: Math.cos((p.rotDeg * Math.PI) / 180), sr: Math.sin((p.rotDeg * Math.PI) / 180) }));
+  const pn = panels.map(flatPanel).map((p) => ({ p, cr: Math.cos((p.rotDeg * Math.PI) / 180), sr: Math.sin((p.rotDeg * Math.PI) / 180) }));
   for (let k = 0; k < nt; k++) {
     const e = new Float64Array(nP), v = new Float64Array(nP);
     ed.push(e); sunlit.push(v);
-    if (!(day.zenith[k]! < 90)) continue;
-    const depthK = cond?.depths ? cond.depths[k]! : water.depth;
+    if (!(zen[k]! < 90)) continue;
+    const depthK = cond?.depths ? cond.depths[k]! : depth0;
     const momK = cond?.momentsAt ? cond.momentsAt(depthK) : mom;
     const { red, skyOpen, lb, a0 } = derive(cond ? cond.states[k]! : st, momK);
-    const wind = Number.isFinite(day.wind[k]!) ? day.wind[k]! : 0;
-    const rays = refractedSunRays(day.zenith[k]!, day.azimuth[k]!, wind, nFacets);
-    const Fs = (day.parDirectH[k]! + (circ ? circ[k]! : 0)) * rays.transmittance, Fk = day.parDiffuse[k]! * Tsky;
-    const sa = (day.azimuth[k]! * Math.PI) / 180, za = (Math.min(day.zenith[k]!, 89.9) * Math.PI) / 180;
+    const wind = Number.isFinite(wnd[k]!) ? wnd[k]! : 0;
+    const rays = refractedSunRays(zen[k]!, azi[k]!, wind, nFacets);
+    const Fs = (pDir[k]! + (circ ? circ[k]! : 0)) * rays.transmittance, Fk = pDif[k]! * Tsky;
+    const sa = (azi[k]! * Math.PI) / 180, za = (Math.min(zen[k]!, 89.9) * Math.PI) / 180;
     const air = [Math.sin(za) * Math.sin(sa), Math.sin(za) * Math.cos(sa), Math.cos(za)] as const;
-    const z = Math.min(Math.max(day.zenith[k]!, Z[0]!), Z[nz - 1]!);
+    const z = Math.min(Math.max(zen[k]!, Z[0]!), Z[nz - 1]!);
     const [j, f] = bracket(Z, z);
     const beam = Math.exp((1 - f) * lb[j]! + f * lb[j + 1]!);
     // broad = sum_m cos(m sa) [(1-f) D_j + f D_j+1] + sin(m sa) [(1-f) E_j + f E_j+1]

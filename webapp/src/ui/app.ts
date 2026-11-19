@@ -5,7 +5,8 @@ import type { PresetFile } from "../core/pe.ts";
 import { type HourlyLight, lightFromJson, clearSkyLight, distanceKm, utcOffsetFromLon, MATCH_KM } from "../core/surface.ts";
 import { solarNoon } from "../core/solar.ts";
 import type { Inputs, Results, ScenarioOut } from "./compute.ts";
-import type { Day } from "../core/scenarios.ts";
+import { type Day, w0FromReading, w0Bounds } from "../core/scenarios.ts";
+import { kdSeriesFromCsv, tideFromCsv, cleanDatesFromText } from "../core/conditions.ts";
 import { HELP } from "./help.ts";
 import { COLORS, ZONE_TINTS, lineChart, mapChart, colorbar, dailyLightChart, peChart } from "./charts.ts";
 import { tmyUrl, hourlyUrl, importText, readFile } from "./pvgis.ts";
@@ -31,28 +32,35 @@ const TARGETS: Record<string, { label: string; shape: "rect" | "circle"; lx: num
   rect: { label: "Rectangle (set size)", shape: "rect", lx: 1.0, ly: 1.0 },
   circle: { label: "Circle (set size)", shape: "circle", lx: 1.0, ly: 1.0 },
 };
-const KD_PRESETS: [string, string, number][] = [["clear", "Clear water · Kd 0.06", 0.06], ["moderate", "Moderate reef · Kd 0.10", 0.10],
-  ["sipaway", "Sipaway 2025 · Kd 0.21", 0.21], ["turbid", "Turbid inshore · Kd 0.45", 0.45]];
+const KD_PRESETS: [string, string, number][] = [["clear", "Clear reef water · Kd 0.06", 0.06], ["moderate", "Moderate reef · Kd 0.10", 0.10],
+  ["turbid", "Turbid inshore reef · Kd 0.45", 0.45]];
+const W0_DEFAULT = 0.7, W0_RANGE: [number, number] = [0.5, 0.9];   // published range for coastal and reef waters (see help)
 
 interface UI { mode: "simple" | "expert"; targetKey: string; kdKey: string; lightLabel: string; lightKind: string; noonMode: "computed" | "user"; windMode: "data" | "set";
-  clothAuto: boolean; canopyAuto: boolean; day: Day | null }
+  clothAuto: boolean; canopyAuto: boolean; day: Day | null; foulMode: "none" | "time"; w0Note: string; w0Source: "default" | "reading" | "user"; kdNote: string; tideNote: string;
+  reading: { pct: number; err: number; lx: number; ly: number; h: number; date: string; time: string; diffuse: number } }
 
 const ex = CSP_BOOT.example;
 const state: Inputs = {
   site: { name: ex.name, lat: ex.lat, lon: ex.lon, tz: ex.utc_offset_h },
   start: parseDate(ex.deployment.start), end: parseDate(ex.deployment.end),
-  target: { shape: "circle", lx: 1.1, ly: 1.1 }, depth: 10, height: 0.75, water: { kd: 0.10, w0: 0.9 },
+  target: { shape: "circle", lx: 1.1, ly: 1.1 }, depth: 10, height: 0.75, water: { kd: 0.10, w0: W0_DEFAULT, w0Lo: W0_RANGE[0], w0Hi: W0_RANGE[1] },
   scenario: "both", sync: true, clothRating: 80, dynamicTargetReduction: 75, clothSize: null, canopy: null,
-  noonShift: 0, wind: null, coral: { preset: "typical", acclimate: "site" }, gridSpacing: 0.05,
+  noonShift: 0, wind: null, coral: { preset: "typical", acclimate: "time" }, gridSpacing: 0.05,
+  fouling: null, kdSeriesText: null, tideText: null,
 };
-const ui: UI = { mode: "simple", targetKey: "reef_star", kdKey: "moderate", lightLabel: "Sipaway 2025 example · PVGIS-ERA5 typical year", lightKind: "tmy",
-  noonMode: "computed", windMode: "data", clothAuto: true, canopyAuto: true, day: null };
+const ui: UI = { mode: "simple", targetKey: "reef_star", kdKey: "moderate", lightLabel: "Example light data: PVGIS-ERA5 typical year for this site. Light data → Change… to use your own site.", lightKind: "tmy",
+  noonMode: "computed", windMode: "data", clothAuto: true, canopyAuto: true, day: null, foulMode: "none", w0Note: "", w0Source: "default", kdNote: "", tideNote: "",
+  reading: { pct: 15, err: 2, lx: 1.2, ly: 1.2, h: 0.75, date: ex.deployment.start, time: "12:00", diffuse: 30 } };
 let light: HourlyLight = lightFromJson(ex.light);
-let dataLight = light, dataLabel = ui.lightLabel;   // the loaded data (example or file); `light` may be a clear-sky stand-in
+let dataLight = light, dataLabel = ui.lightLabel;
+const exampleLight = light;   // the loaded data (example or file); `light` may be a clear-sky stand-in
 const isClear = () => light.database.startsWith("clear sky");
 /** What a day in the results represents, and the assumptions behind daily values (as Python's DesignResult). */
 const weatherLabel = () => (isClear() ? "clear-sky estimate" : ui.lightKind === "tmy" ? "typical-year day" : "recorded");
-const assumptions = () => `daily values assume Kd ${state.water.kd} m-1 on every day and a fixed depth of ${state.depth} m (no tide); `
+const assumptions = () => `daily values assume ${state.kdSeriesText ? "Kd by date (interpolated between the dates given)" : `Kd ${state.water.kd} m-1 on every day`} and `
+  + `${state.tideText ? `a depth that follows the tide (${state.depth} m at mean water level)` : `a fixed depth of ${state.depth} m (no tide)`}; `
+  + `water scattering w0 ${state.water.w0} (range ${state.water.w0Lo}-${state.water.w0Hi}); `
   + ({ "typical-year day": "with typical-year light each date is one typical-year day, not that year's weather",
     recorded: "recorded hourly weather", "clear-sky estimate": "clear-sky light (no clouds)" } as Record<string, string>)[weatherLabel()];
 const noonText = () => { const n = solarNoon(state.start[0], state.start[1], state.start[2], state.site.lon, state.site.tz); return hhmm(((n % 1440) + 1440) % 1440); };
@@ -75,6 +83,8 @@ function refreshSiteInfo() {
   if (tzEl && document.activeElement !== tzEl) tzEl.value = String(state.site.tz);
   const lab = document.getElementById("light-label");
   if (lab) { lab.textContent = ui.lightLabel; lab.classList.toggle("warn", isClear()); }
+  const chip = document.getElementById("chip");
+  if (chip) chip.innerHTML = `${dataLight === exampleLight && !isClear() ? "Example site" : "Site"}: <b>${esc(state.site.name)}</b>`;
   const nb = document.querySelector('[data-tog="noonMode"] button[data-v="computed"]');
   if (nb) nb.textContent = `Computed ${noonText()}`;
 }
@@ -134,6 +144,8 @@ const num = (id: string, v: number, step = 0.01, unit = "", min?: number, max?: 
   `<span class="inp"><input id="${id}" type="number" step="${step}" value="${v}"${min !== undefined ? ` min="${min}"` : ""}${max !== undefined ? ` max="${max}"` : ""}>${unit ? `<span class="unit">${unit}</span>` : ""}</span>`;
 const tog = (name: string, opts: [string, string][], v: string) => `<span class="tog" data-tog="${name}">${opts.map(([k, l]) => `<button type="button" data-v="${k}" class="${k === v ? "on" : ""}">${esc(l)}</button>`).join("")}</span>`;
 
+const W0B = w0Bounds(CSP_BOOT.tables);
+
 function renderLeft() {
   const P = CSP_BOOT.presets.presets;
   const E = ui.mode === "expert";
@@ -159,7 +171,9 @@ function renderLeft() {
     <div class="field"><label>Depth of the corals ${info("depth")}</label>${num("depth", state.depth, 0.5, "m", 0.5, 60)}</div>
     <div class="field"><label>Height above corals ${info("height")}</label>${num("height", state.height, 0.05, "m", 0.05, 30)}</div>
     ${E ? `<div class="field"><label>Kd (PAR) ${info("kd")}</label>${num("kd", state.water.kd, 0.01, "m⁻¹", 0.02, 1.5)}</div>
-    <div class="field"><label>Scattering ω₀ ${info("w0")}</label>${num("w0", state.water.w0, 0.05, "", 0.5, 0.9)}</div>`
+    <div class="field"><label>Scattering ω₀ ${info("w0")}</label>${num("w0", state.water.w0, 0.01, "", W0B[0], W0B[1])}</div>
+    <div class="field"><label>ω₀ range ${info("w0range")}</label><span class="pair">${num("w0lo", state.water.w0Lo, 0.01, "", W0B[0], W0B[1])}<span>–</span>${num("w0hi", state.water.w0Hi, 0.01, "", W0B[0], W0B[1])}</span></div>
+    ${ui.w0Note ? `<p class="sub">${esc(ui.w0Note)}</p>` : ""}`
     : `<div class="field"><label>Water clarity ${info("kd")}</label>${sel("kdPreset", [...KD_PRESETS.map(([k, l]) => [k, l] as [string, string]), ...(ui.kdKey === "custom" ? [["custom", `Custom · Kd ${state.water.kd}`] as [string, string]] : [])], ui.kdKey)}</div>`}
     <div class="lab">Shading ${info("scenario")}</div>${tog("scenario", [["constant", "Constant shading"], ["dynamic", "Dynamic shading"], ["both", "Both"]], state.scenario)}
     ${state.scenario !== "dynamic" ? `<div class="field"><label>Cloth shade rating ${info("clothRating")}</label><span class="val">${state.clothRating} %</span></div>
@@ -168,10 +182,31 @@ function renderLeft() {
     ${state.scenario !== "constant" && (!state.sync || state.scenario === "dynamic") ? `<div class="field"><label>Dynamic shading: light reduction</label><span class="val">${state.dynamicTargetReduction} %</span></div>
     <input id="dynRed" class="slider" type="range" min="10" max="95" step="1" value="${state.dynamicTargetReduction}">` : ""}
   </section>
+  ${E ? `<section class="card step"><h3><i>·</i>Water scattering from a field reading ${info("w0reading")}</h3>
+    <p class="sub">Light under an opaque board ÷ open water at the same depth, read at the board's center.</p>
+    <div class="field"><label>Under ÷ open, %</label><span class="pair">${num("rdPct", ui.reading.pct, 0.5, "", 0, 100)}<span>±</span>${num("rdErr", ui.reading.err, 0.5, "", 0, 50)}</span></div>
+    <div class="field"><label>Board, m (E–W × N–S)</label><span class="pair">${num("rdLx", ui.reading.lx, 0.05)}<span>×</span>${num("rdLy", ui.reading.ly, 0.05)}</span></div>
+    <div class="field"><label>Board above the sensor</label>${num("rdH", ui.reading.h, 0.05, "m", 0.05, 5)}</div>
+    <div class="field"><label>Taken</label><span class="pair dt"><input id="rdDate" type="date" value="${ui.reading.date}"><input id="rdTime" type="time" value="${ui.reading.time}"></span></div>
+    <div class="field"><label>Sky light (diffuse share)</label>${num("rdDif", ui.reading.diffuse, 5, "%", 0, 100)}</div>
+    <div class="row"><button id="btn-w0" class="btn sea sm">Find ω₀ from the reading</button></div>
+  </section>
+  <section class="card step"><h3><i>·</i>Water through the deployment</h3>
+    <div class="lab">Kd by date ${info("kdseries")}</div>
+    <textarea id="kdSeries" class="txt" rows="3" placeholder="2025-04-28, 0.18&#10;2025-06-01, 0.25">${esc(state.kdSeriesText ?? "")}</textarea>
+    ${ui.kdNote ? `<p class="sub">${esc(ui.kdNote)}</p>` : ""}
+    <div class="lab">Tide: water level ${info("tide")}</div>
+    <textarea id="tideSeries" class="txt" rows="3" placeholder="2025-04-28 00:00, 0.42&#10;2025-04-28 01:00, 0.61">${esc(state.tideText ?? "")}</textarea>
+    ${ui.tideNote ? `<p class="sub">${esc(ui.tideNote)}</p>` : ""}
+  </section>` : ""}
   ${E && state.scenario !== "dynamic" ? `<section class="card step"><h3><i>·</i>Constant shading: shade cloth ${info("fouling")}</h3>
     <div class="field"><label>Light through, clean</label>${num("tauClean", +tauC.toFixed(3), 0.01, "", 0, 1)}</div>
-    <div class="field"><label>Light through, fouled</label>${num("tauFouled", state.tauFouled ?? +Math.max(0, tauC * 0.7).toFixed(3), 0.01, "", 0, 1)}</div>
-    <div class="field"><label>Share of time fouled</label>${num("fouledShare", Math.round(100 * (state.fouledShare ?? 0)), 5, "%", 0, 100)}</div>
+    <div class="field"><label>Fouling</label>${tog("foulMode", [["none", "None"], ["time", "Builds up"]], ui.foulMode)}</div>
+    ${ui.foulMode === "time" && state.fouling ? `<div class="field"><label>Light through, fully fouled</label>${num("fTau", state.fouling.tauFouled, 0.01, "", 0, 1)}</div>
+    <div class="field"><label>Days to foul fully</label>${num("fDays", state.fouling.daysToFoul, 1, "d", 0, 365)}</div>
+    <div class="field"><label>Cleaned every</label>${num("fEvery", state.fouling.cleanEvery, 1, "d", 0, 365)}</div>
+    <div class="lab">Other cleaning dates</div><input id="fDates" class="txt" value="${esc(state.fouling.cleanDates)}" placeholder="2025-06-15, 2025-07-10">
+    <p class="sub">0 days between cleanings means it is only clean at the start.</p>` : ""}
     <div class="field"><label>Size</label>${tog("clothAuto", [["auto", "Automatic"], ["set", "Set"]], ui.clothAuto ? "auto" : "set")}</div>
     ${!ui.clothAuto ? `<div class="field"><label>East–west × north–south</label><span class="pair">${num("clx", state.clothSize?.lx ?? 3, 0.05)}<span>×</span>${num("cly", state.clothSize?.ly ?? 2, 0.05, "m")}</span></div>` : ""}
   </section>` : ""}
@@ -184,7 +219,7 @@ function renderLeft() {
   <section class="card step"><h3><i>3</i>Coral type</h3>
     <div class="field"><label>Species ${info("coral")}</label>${sel("coral", P.map((p: any) => [p.id, p.label + (p.status === "caution" ? " (use with care)" : "")]), state.coral.preset)}</div>
     ${P.find((p: any) => p.id === state.coral.preset)?.Ek_Emax
-      ? `<div class="field"><label>Corals adjusted to ${info("acclimation")}</label>${sel("accl", [["site", "Light at this depth"], ["shade", "The shade"], ["none", "As measured"]], state.coral.acclimate)}</div>`
+      ? `<div class="field"><label>Corals adjusted to ${info("acclimation")}</label>${sel("accl", [["time", "Over time (from this depth to the shade)"], ["site", "Light at this depth"], ["shade", "The shade"], ["none", "As measured"]], state.coral.acclimate)}</div>`
       : `<div class="field"><label>Corals adjusted to ${info("acclimation")}</label><span class="val">As measured</span></div><p class="sub">The source gives no growth light for this coral, so its measured Ek is used.</p>`}
     ${E ? `<div class="field"><label>Ek (as measured)</label>${num("ek", state.coral.ek ?? P.find((p: any) => p.id === state.coral.preset)!.Ek, 1, "µmol m⁻² s⁻¹", 5, 2000)}</div>
     <div class="field"><label>Respiration ÷ Pmax</label>${num("rpg", state.coral.rOverPg ?? P.find((p: any) => p.id === state.coral.preset)!.R_over_Pg ?? 0, 0.01, "", 0, 0.99)}</div>
@@ -270,12 +305,43 @@ function onInput(e: Event) {
     case "height": if (v > 0) state.height = v; break;
     case "kdPreset": { ui.kdKey = el.value; const k = KD_PRESETS.find((p) => p[0] === el.value); if (k) state.water.kd = k[2]; break; }
     case "kd": if (v > 0) { state.water.kd = v; ui.kdKey = KD_PRESETS.find((p) => p[2] === v)?.[0] ?? "custom"; } break;
-    case "w0": if (v >= 0.5 && v <= 0.9) state.water.w0 = v; break;
+    case "w0": if (v >= W0B[0] && v <= W0B[1]) { state.water.w0 = v; ui.w0Note = ""; ui.w0Source = "user"; } break;
+    case "w0lo": if (v >= W0B[0] && v <= W0B[1]) { state.water.w0Lo = v; ui.w0Note = ""; ui.w0Source = "user"; } break;
+    case "w0hi": if (v >= W0B[0] && v <= W0B[1]) { state.water.w0Hi = v; ui.w0Note = ""; ui.w0Source = "user"; } break;
+    case "rdPct": if (v > 0) ui.reading.pct = v; return;
+    case "rdErr": if (v >= 0) ui.reading.err = v; return;
+    case "rdLx": if (v > 0) ui.reading.lx = v; return;
+    case "rdLy": if (v > 0) ui.reading.ly = v; return;
+    case "rdH": if (v > 0) ui.reading.h = v; return;
+    case "rdDate": ui.reading.date = el.value; return;
+    case "rdTime": ui.reading.time = el.value; return;
+    case "rdDif": if (v >= 0 && v <= 100) ui.reading.diffuse = v; return;
+    case "kdSeries": {
+      const t = (el as unknown as HTMLTextAreaElement).value.trim();
+      if (!t) { state.kdSeriesText = null; ui.kdNote = ""; break; }
+      try { const s = kdSeriesFromCsv(t); state.kdSeriesText = t; ui.kdNote = `${s.size} dates read; each day is interpolated between them.`; }
+      catch (e) { ui.kdNote = `Not used: ${e instanceof Error ? e.message : String(e)}`; state.kdSeriesText = null; }
+      renderLeft(); break;
+    }
+    case "tideSeries": {
+      const t = (el as unknown as HTMLTextAreaElement).value.trim();
+      if (!t) { state.tideText = null; ui.tideNote = ""; break; }
+      try {
+        const td = tideFromCsv(t), a = td.tLocal[0]!, b = td.tLocal[td.tLocal.length - 1]!;
+        const d0 = Date.UTC(state.start[0], state.start[1] - 1, state.start[2]) / 60000, d1 = Date.UTC(state.end[0], state.end[1] - 1, state.end[2]) / 60000 + 1440;
+        if (a > d0 || b < d1) throw new Error("the series must cover the whole deployment");
+        let lo = Infinity, hi = -Infinity; for (const x of td.level) { lo = Math.min(lo, x); hi = Math.max(hi, x); }
+        state.tideText = t; ui.tideNote = `${td.level.length} levels read; range ${fmt(hi - lo, 2)} m. The depth above is taken at mean water level.`;
+      } catch (e) { ui.tideNote = `Not used: ${e instanceof Error ? e.message : String(e)}`; state.tideText = null; }
+      renderLeft(); break;
+    }
+    case "fTau": if (state.fouling && v >= 0 && v <= 1) state.fouling.tauFouled = v; break;
+    case "fDays": if (state.fouling && v >= 0) state.fouling.daysToFoul = v; break;
+    case "fEvery": if (state.fouling && v >= 0) state.fouling.cleanEvery = Math.round(v); break;
+    case "fDates": if (state.fouling) { cleanDatesFromText(el.value); state.fouling.cleanDates = el.value; } break;
     case "rating": state.clothRating = Math.round(v); delete state.tauClean; (el.previousElementSibling!.querySelector(".val") as HTMLElement).textContent = `${state.clothRating} %`; break;
     case "dynRed": state.dynamicTargetReduction = Math.round(v); (el.previousElementSibling!.querySelector(".val") as HTMLElement).textContent = `${state.dynamicTargetReduction} %`; break;
-    case "tauClean": if (v >= 0 && v <= 1) state.tauClean = v; break;
-    case "tauFouled": if (v >= 0 && v <= 1) state.tauFouled = v; break;
-    case "fouledShare": if (v >= 0 && v <= 100) { state.fouledShare = v / 100; if (state.tauFouled === undefined) state.tauFouled = +((state.tauClean ?? 1 - state.clothRating / 100) * 0.7).toFixed(3); } break;
+    case "tauClean": if (v >= 0 && v <= 1) { state.tauClean = v; if (state.fouling) state.fouling.tauClean = v; } break;
     case "clx": case "cly": state.clothSize = { lx: parseFloat(($("#clx") as HTMLInputElement).value), ly: parseFloat(($("#cly") as HTMLInputElement).value) }; break;
     case "plx": case "ply": case "pcx": case "pcy": case "prot":
       state.canopy = { lx: parseFloat(($("#plx") as HTMLInputElement).value), ly: parseFloat(($("#ply") as HTMLInputElement).value),
@@ -305,8 +371,32 @@ function onToggle(name: string, v: string) {
       state.canopy = ui.canopyAuto ? null : { lx: p?.lx ?? 1.3, ly: p?.ly ?? 1.3, cx: 0, cy: 0, rot: 0 }; break;
     }
     case "mode": ui.mode = v as UI["mode"]; document.body.classList.toggle("expert", ui.mode === "expert"); break;
+    case "foulMode": {
+      ui.foulMode = v as UI["foulMode"];
+      const tc = state.tauClean ?? 1 - state.clothRating / 100;
+      state.fouling = v === "time" ? { tauClean: tc, tauFouled: +(tc * 0.6).toFixed(3), daysToFoul: 30, cleanEvery: 0, cleanDates: "" } : null;
+      break;
+    }
   }
   renderLeft(); schedule(); if (last) renderResults();
+}
+
+// ------------------------------------------------------------------ w0 from a field reading
+function findW0() {
+  const R = ui.reading, T = CSP_BOOT.tables;
+  const [hh, mm] = R.time.split(":").map(Number);
+  const date = parseDate(R.date), minute = (hh ?? 12) * 60 + (mm ?? 0);
+  const pan = { cx: 0, cy: 0, lx: R.lx, ly: R.ly, height: R.h, tau: 0, rotDeg: 0 };
+  try {
+    const f = (pct: number) => w0FromReading(T, Math.max(pct, 0.01) / 100, pan, [0, 0], state.water.kd, state.depth, date, minute,
+      state.site.lat, state.site.lon, state.site.tz, R.diffuse / 100, 0);
+    const mid = f(R.pct), lo = f(R.pct - R.err), hi = f(R.pct + R.err);
+    const r2 = (x: number) => +x.toFixed(2);
+    state.water.w0 = r2(mid.w0); state.water.w0Lo = r2(Math.min(lo.w0, hi.w0)); state.water.w0Hi = r2(Math.max(lo.w0, hi.w0)); ui.w0Source = "reading";
+    const edge = mid.status === "ok" ? "" : ` The reading is ${mid.status === "below" ? "darker" : "brighter"} than the model gives for any ω₀ in the tables (${fmt(100 * mid.ratioMin, 1)}–${fmt(100 * mid.ratioMax, 1)} %); check Kd, depth, the board and the time.`;
+    ui.w0Note = `From the reading: ω₀ ${fmt(mid.w0, 2)} (range ${fmt(state.water.w0Lo, 2)}–${fmt(state.water.w0Hi, 2)} for ±${R.err} %), with Kd ${state.water.kd} and the corals' depth ${state.depth} m.${edge}`;
+  } catch (e) { ui.w0Note = `Could not use the reading: ${e instanceof Error ? e.message : String(e)}`; }
+  renderLeft(); schedule();
 }
 
 // ------------------------------------------------------------------ results
@@ -333,19 +423,20 @@ function renderResults() {
   const C = sc("constant"), D = sc("dynamic"), open = r.open.dliMean;
   const red = (s: ScenarioOut) => 100 * (1 - s.T);
   const main = D ?? C!;
+  const rng = (s: ScenarioOut) => s.w0Range ? `, likely ${fmt(100 * Math.min(...s.w0Range), 0)}–${fmt(100 * Math.max(...s.w0Range), 0)} %,` : "";
   const ratingNote = C && state.tauClean === undefined
     ? ` The cloth is rated ${state.clothRating} % shade, but light also reaches the corals from the sides, so more gets through than the rating suggests.` : "";
   const lead = C && D
     ? (Math.abs(C.T - D.T) < 0.01
-      ? `Both kinds of shading give the corals ${pct(100 * C.T)} of open-water light over the deployment (${pct(red(C))} less).${ratingNote}${state.sync ? " Dynamic shading is sized to match constant shading." : ""}`
-      : `Over the deployment, constant shading gives the corals ${pct(100 * C.T)} of open-water light and dynamic shading ${pct(100 * D.T)}.${ratingNote}`)
-    : `${nameOf(main)} gives the corals ${pct(100 * main.T)} of open-water light over the deployment (${pct(red(main))} less).${C ? ratingNote : ""}`;
+      ? `Both kinds of shading give the corals ${pct(100 * C.T)} of open-water light over the deployment${rng(D).replace(/,$/, "")} (${pct(red(C))} less).${ratingNote}${state.sync ? " Dynamic shading is sized to match constant shading." : ""}`
+      : `Over the deployment, constant shading gives the corals ${pct(100 * C.T)} of open-water light${rng(C)} and dynamic shading ${pct(100 * D.T)}${rng(D).replace(/,$/, "")}.${ratingNote}`)
+    : `${nameOf(main)} gives the corals ${pct(100 * main.T)} of open-water light over the deployment${rng(main).replace(/,$/, "")} (${pct(red(main))} less).${C ? ratingNote : ""}`;
   const kpis: string[] = [];
   if (D) kpis.push(`<div class="card kpi"><div class="t"><span class="dot" style="background:${COLORS.canopy}"></span>Dynamic shading</div><div class="n">${fmt(D.panel.lx, 2)} × ${fmt(D.panel.ly, 2)} m</div><div class="s">Opaque canopy, east–west × north–south, ${fmt(state.height, 2)} m above the corals.${D.solve ? (state.sync && C ? " Sized to give the same light as constant shading." : ` Sized for ${state.dynamicTargetReduction} % less light.`) : " Size set by you."}</div></div>`);
-  if (C) kpis.push(`<div class="card kpi"><div class="t"><span class="dot" style="background:${COLORS.cloth}"></span>Constant shading</div><div class="n">${fmt(C.panel.lx, 1)} × ${fmt(C.panel.ly, 1)} m</div><div class="s">${state.tauClean !== undefined ? `Cloth passing ${fmt(100 * state.tauClean, 0)} % when clean` : `${state.clothRating} % shade cloth`}, ${fmt(state.height, 2)} m above the corals.${ui.clothAuto ? " Big enough that the sun reaches the corals only through it." : ""}</div></div>`);
-  kpis.push(`<div class="card kpi"><div class="t">Daily light at the corals</div><div class="n">${fmt(main.dliMean, 1)}</div><div class="u">mol m⁻² d⁻¹, ${pct(100 * main.T)} of open water</div><div class="s">Open water at ${fmt(state.depth, 1)} m: ${fmt(open, 1)}.${C && D ? ` Constant shading: ${fmt(C.dliMean, 1)}.` : ""}</div></div>`);
+  if (C) kpis.push(`<div class="card kpi"><div class="t"><span class="dot" style="background:${COLORS.cloth}"></span>Constant shading</div><div class="n">${fmt(C.panel.lx, 1)} × ${fmt(C.panel.ly, 1)} m</div><div class="s">${state.tauClean !== undefined ? `Cloth passing ${fmt(100 * state.tauClean, 0)} % when clean` : `${state.clothRating} % shade cloth`}${state.fouling ? `, fouling to ${fmt(100 * state.fouling.tauFouled, 0)} % over ${state.fouling.daysToFoul} days${state.fouling.cleanEvery > 0 ? `, cleaned every ${state.fouling.cleanEvery} days` : ""}` : ""}, ${fmt(state.height, 2)} m above the corals.${ui.clothAuto ? " Big enough that the sun reaches the corals only through it." : ""}</div></div>`);
+  kpis.push(`<div class="card kpi"><div class="t">Daily light at the corals</div><div class="n">${fmt(main.dliMean, 1)}</div><div class="u">mol m⁻² d⁻¹, ${pct(100 * main.T)} of open water${main.w0Range ? ` (${fmt(100 * Math.min(...main.w0Range), 0)}–${fmt(100 * Math.max(...main.w0Range), 0)} %)` : ""}</div><div class="s">Open water at ${fmt(state.depth, 1)} m: ${fmt(open, 1)}.${C && D ? ` Constant shading: ${fmt(C.dliMean, 1)}.` : ""}</div></div>`);
   const b = main.bio;
-  kpis.push(`<div class="card kpi"><div class="t">Coral photosynthesis</div><div class="n">${pct(100 * b.grossVsOpen!)}</div><div class="u">of what it would be unshaded</div><div class="s">${nameOf(main)}${C && D ? `; constant shading ${pct(100 * C.bio.grossVsOpen!)}` : ""}. Corals adjusted to ${state.coral.acclimate === "site" ? "this depth" : state.coral.acclimate === "shade" ? "the shade" : "their source site"}.</div></div>`);
+  kpis.push(`<div class="card kpi"><div class="t">Coral photosynthesis</div><div class="n">${pct(100 * b.grossVsOpen!)}</div><div class="u">of what it would be unshaded</div><div class="s">${nameOf(main)}${C && D ? `; constant shading ${pct(100 * C.bio.grossVsOpen!)}` : ""}. ${({ time: "Corals adjust over days from the light at this depth to the shade", site: "Corals adjusted to this depth", shade: "Corals adjusted to the shade", none: "Corals as measured at their source site" } as Record<string, string>)[state.coral.acclimate]}.</div></div>`);
   // ---- a day under the structures (any day of the deployment)
   const di = dayIndex(r), dd = r.days[di]!, nD = r.days.length;
   const odli = r.open.dayDli, lo = Math.min(...odli), hi = Math.max(...odli);
@@ -354,7 +445,7 @@ function renderResults() {
   const legend = `<div class="legend"><span><span class="dot" style="background:${COLORS.open}"></span>Open water at ${fmt(state.depth, 1)} m</span>${r.scenarios.map((s) => `<span><span class="dot" style="background:${color(s)}"></span>${nameOf(s)}</span>`).join("")}</div>`;
   const picker = `<div class="daypick"><button class="btn ghost sm" data-day="-1" aria-label="Previous day"${di === 0 ? " disabled" : ""}>‹</button><input id="dayIdx" type="range" min="0" max="${nD - 1}" step="1" value="${di}" aria-label="Day of the deployment"><button class="btn ghost sm" data-day="1" aria-label="Next day"${di === nD - 1 ? " disabled" : ""}>›</button><span class="dd">${MON[dd[1] - 1]} ${dd[2]}</span></div>`;
   const dayNote = isClear() ? `Clear-sky estimate (no clouds), so every day looks alike; open water got ${fmt(odli[di]!, 1)} mol m⁻² that day. Area mean.`
-    : `${ui.lightKind === "tmy" ? "Typical-year day (one plausible day for this date, not that year's weather)" : "Recorded"} weather; open water got ${fmt(odli[di]!, 1)} mol m⁻² that day (deployment range ${fmt(lo, 1)}–${fmt(hi, 1)}, lower on cloudy days). Area mean. Assumes Kd ${state.water.kd} m⁻¹ on every day and a fixed depth (no tide).`;
+    : `${ui.lightKind === "tmy" ? "Typical-year day (one plausible day for this date, not that year's weather)" : "Recorded"} weather; open water got ${fmt(odli[di]!, 1)} mol m⁻² that day (deployment range ${fmt(lo, 1)}–${fmt(hi, 1)}, lower on cloudy days). Area mean. ${state.kdSeriesText ? `Kd that day ${fmt(r.kdDays[di]!, 3)} m⁻¹` : `Kd ${state.water.kd} m⁻¹ on every day`}; ${r.depthNoon ? `corals at ${fmt(r.depthNoon[di]!, 2)} m at noon (tide)` : "fixed depth (no tide)"}.`;
   // ---- maps
   const allDli = r.scenarios.flatMap((s) => s.pointDli);
   const vmin = Math.floor(Math.min(...allDli) * 2) / 2, vmax = Math.ceil(Math.max(...allDli) * 2) / 2;
@@ -366,6 +457,9 @@ function renderResults() {
   const dayLight = (s: ScenarioOut) => r.open.dayDli.map((o, i) => o * (1 - s.dayReduction[i]!.mean / 100));
   const season = dailyLightChart(r.days, [{ y: r.open.dayDli, color: COLORS.open, name: "Open water", dash: "5 4" },
     ...r.scenarios.map((s) => ({ y: dayLight(s), color: color(s), name: nameOf(s) }))]);
+  const condNote = (state.kdSeriesText ? ` Water clarity changes by date (Kd ${fmt(Math.min(...r.kdDays), 2)}–${fmt(Math.max(...r.kdDays), 2)} m⁻¹).` : "")
+    + (r.depthNoon ? " Depth follows the tide." : "")
+    + (C?.tauDays ? ` The cloth passes ${fmt(100 * Math.min(...C.tauDays), 0)}–${fmt(100 * Math.max(...C.tauDays), 0)} % as it fouls and is cleaned.` : "");
   const means = `Means: open water ${fmt(open, 1)}${r.scenarios.map((s) => `, ${nameOf(s).toLowerCase()} ${fmt(s.dliMean, 1)}`).join("")} mol m⁻² d⁻¹.`;
   // ---- coral response
   const preset = CSP_BOOT.presets.presets.find((p: any) => p.id === state.coral.preset);
@@ -401,11 +495,11 @@ function renderResults() {
   }
   if (D && D.panel.lx + 0.02 < state.target.lx)
     checks.push(`<div class="check"><span class="badge warn">CHECK</span><div><b>The ends of the coral area get little shade from dynamic shading</b><br><span class="sub">The canopy (${fmt(D.panel.lx, 2)} m east–west) is narrower than the coral area (${fmt(state.target.lx, 1)} m east–west), so the east and west ends stay in the sun. Lay the coral area long north–south: the sun crosses from east to west, so the shade then spreads evenly.</span></div></div>`);
-  const rob = (D ?? C)?.robustness;
-  if (rob) {
+  const rob = main.robustness, wr = main.w0Range;
+  if (rob && wr) {
     const pick = (p: string) => rob.filter((x) => x.case.startsWith(p)).map((x) => 100 * x.T);
-    const w = pick("w0"), k = pick("Kd"), s = pick("shifted");
-    checks.push(`<div class="check"><span class="badge note">RANGE</span><div><b>Light at the corals: ${pct(100 * (D ?? C)!.T)} of open water, likely between ${fmt(Math.min(...w), 0)} and ${fmt(Math.max(...w), 0)} %</b><br><span class="sub">The range comes from how much the water scatters light sideways under the structure (from clearer to more turbid reef water), which is rarely measured. Water clarity ±50 % changes it only to ${fmt(Math.min(...k), 0)}–${fmt(Math.max(...k), 0)} %, and moving the structure 0.2 m to at most ${fmt(Math.max(...s), 0)} %. One light reading under and beside the structure narrows the range (see the field protocol in the help).</span></div></div>`);
+    const k = pick("Kd"), s = pick("shifted");
+    checks.push(`<div class="check"><span class="badge note">RANGE</span><div><b>Light at the corals: ${pct(100 * main.T)} of open water, likely between ${fmt(100 * Math.min(...wr), 0)} and ${fmt(100 * Math.max(...wr), 0)} %</b><br><span class="sub">${nameOf(main)}. The range comes from how strongly the water scatters light sideways under the structure (ω₀ ${state.water.w0Lo}–${state.water.w0Hi}, ${({ default: "the span typical of coastal and reef waters, since it is rarely measured", reading: `from your field reading and its uncertainty`, user: "as you set it" } as Record<string, string>)[ui.w0Source]}). Water clarity ±50 % changes it to ${fmt(Math.min(...k), 0)}–${fmt(Math.max(...k), 0)} %, and moving the structure 0.2 m to at most ${fmt(Math.max(...s), 0)} %. ${ui.w0Source === "reading" ? "A second reading on another day checks it." : "One light reading under an opaque board narrows the range (Expert → Water scattering from a field reading)."}</span></div></div>`);
   } else checks.push(`<div class="check"><span class="badge note">…</span><div><b>Uncertainty range</b><br><span class="sub">Computing…</span></div></div>`);
   for (const w of r.warnings) checks.push(`<div class="check"><span class="badge warn">NOTE</span><div>${esc(w)}</div></div>`);
   checks.push(`<div class="check"><span class="badge note">FIELD</span><div><b>Measure to confirm</b><br><span class="sub">Light under and beside the structure at 09:00, noon and 15:00 shows how this water behaves. See the field protocol in the help.</span></div></div>`);
@@ -427,7 +521,7 @@ function renderResults() {
     <div class="kpis">${kpis.join("")}</div>
     <div class="grid2"><div class="card"><h2>A day under the structures</h2>${picker}<p class="sub">${dayNote}</p>${lineChart(series, { ylab: "PAR at the corals, area mean (µmol m⁻² s⁻¹)", noon: r.noons[di] })}${legend}</div>
     <div class="card"><h2>Daily light across the coral area</h2><p class="sub">Deployment mean. Colors: daily light on each part of the coral area. Dashed line: the structure. White line: edge of the coral area.${never}</p><div class="maps">${maps}</div>${colorbar(vmin, vmax, "Daily light (mol m⁻² d⁻¹)")}</div></div>
-    <div class="grid2"><div class="card"><h2>Across the deployment</h2><p class="sub">Daily light at the corals, area mean. Dips are cloudy days; both kinds of shading follow the weather. ${means}</p>${season}${legend}</div>${coral}</div>
+    <div class="grid2"><div class="card"><h2>Across the deployment</h2><p class="sub">Daily light at the corals, area mean. Dips are cloudy days; both kinds of shading follow the weather.${condNote} ${means}</p>${season}${legend}</div>${coral}</div>
     <div class="card"><h2>Checks</h2>${checks.join("")}</div>${expert}`);
 }
 
@@ -508,16 +602,18 @@ function doExport(kind: string) {
   }
   if (kind === "days") {
     const cols = r.scenarios.flatMap((s) => [`${s.kind}_reduction_mean_pct`, `${s.kind}_reduction_min_pct`, `${s.kind}_reduction_max_pct`]);
-    const lines = [`date,weather,open_water_daily_light_mol_m2_d,${cols.join(",")}`];
+    const cl = sc("constant")?.tauDays;
+    const lines = [`date,weather,kd_m1,${r.depthNoon ? "depth_at_noon_m," : ""}open_water_daily_light_mol_m2_d,${cols.join(",")}${cl ? ",cloth_transmission" : ""}`];
     const wx = weatherLabel();
-    r.days.forEach((d, i) => lines.push([dstr(d), wx, r.open.dayDli[i]!.toFixed(3), ...r.scenarios.flatMap((s) => [s.dayReduction[i]!.mean, s.dayReduction[i]!.min, s.dayReduction[i]!.max].map((v) => v.toFixed(2)))].join(",")));
+    r.days.forEach((d, i) => lines.push([dstr(d), wx, r.kdDays[i]!.toFixed(4), ...(r.depthNoon ? [r.depthNoon[i]!.toFixed(3)] : []), r.open.dayDli[i]!.toFixed(3),
+      ...r.scenarios.flatMap((s) => [s.dayReduction[i]!.mean, s.dayReduction[i]!.min, s.dayReduction[i]!.max].map((v) => v.toFixed(2))), ...(cl ? [cl[i]!.toFixed(4)] : [])].join(",")));
     download("csp_days.csv", head + lines.join("\n"));
   }
   if (kind === "report") {
     const w = window.open("", "_blank");
     if (!w) return;
     w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>CSP report</title><style>${$("#css").textContent}body{background:#fff}.top,.exports,.info{display:none}</style></head><body>
-      <div style="padding:20px 28px"><h1 style="margin:0 0 4px">Coral Shading Protocol ${VERSION} · design report</h1><p class="sub">${esc(state.site.name)} (${state.site.lat}, ${state.site.lon}) · ${dstr(state.start)} to ${dstr(state.end)} · ${esc(ui.lightLabel)} · water Kd ${state.water.kd} m⁻¹, ω₀ ${state.water.w0} · corals at ${state.depth} m, structures ${state.height} m above</p>
+      <div style="padding:20px 28px"><h1 style="margin:0 0 4px">Coral Shading Protocol ${VERSION} · design report</h1><p class="sub">${esc(state.site.name)} (${state.site.lat}, ${state.site.lon}) · ${dstr(state.start)} to ${dstr(state.end)} · ${esc(ui.lightLabel)} · water ${state.kdSeriesText ? "Kd by date" : `Kd ${state.water.kd} m⁻¹`}, ω₀ ${state.water.w0} (range ${state.water.w0Lo}–${state.water.w0Hi}) · corals at ${state.depth} m${state.tideText ? " at mean water level, with tide" : ""}, structures ${state.height} m above</p>
       ${$("#right").innerHTML}<p class="sub">Computed ${new Date().toISOString().slice(0, 10)} at ${r.level === "preview" ? "preview" : "full"} resolution. Methods and sources: see the app's help and the methods page.</p></div></body></html>`);
     w.document.close(); setTimeout(() => w.print(), 400);
   }
@@ -528,12 +624,13 @@ function boot() {
   document.body.innerHTML = `
   <header class="top"><div class="brand">Coral Shading Protocol<small>v${VERSION}</small></div>
     <div class="seg" data-tog="mode"><button type="button" data-v="simple" class="on">Simple</button><button type="button" data-v="expert">Expert</button></div>
-    <span class="chip" id="chip">Example: <b>Sipaway 2025</b></span><div class="spacer"></div><span id="status" class="status">Starting…</span>
+    <span class="chip" id="chip"></span><div class="spacer"></div><span id="status" class="status">Starting…</span>
     <button class="btn light" data-export="report">Export report</button></header>
   <main class="wrap"><aside id="left"></aside><section id="right"><div class="card"><p>Computing…</p></div></section></main>
   <footer class="foot">Light engine and data: see Expert → Accuracy. Place search © OpenStreetMap contributors; imagery Sentinel-2 cloudless by EOX. Sunlight data: PVGIS © European Union.</footer>`;
   document.addEventListener("change", onInput);
   document.addEventListener("input", (e) => { const id = (e.target as HTMLElement).id; if (["rating", "dynRed", "dayIdx"].includes(id)) onInput(e); });
+  // the w0 calibration runs here (it needs only the tables and a few engine evaluations)
   document.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
     const b = t.closest("[data-tog] button") as HTMLElement | null;
@@ -543,10 +640,11 @@ function boot() {
     const x = t.closest("[data-export]") as HTMLElement | null;
     if (x) { doExport(x.dataset.export!); return; }
     if (t.id === "btn-data") openDataHelper();
+    if (t.id === "btn-w0") findW0();
     if (t.id === "btn-search") search();
   });
   document.addEventListener("keydown", (e) => { if ((e.target as HTMLElement).id === "search" && e.key === "Enter") search(); });
-  renderLeft(); startWorker(); schedule();
+  renderLeft(); refreshSiteInfo(); startWorker(); schedule();
   // for testing and for power users in the browser console
   (window as unknown as Record<string, unknown>).__csp = { state, ui, toggle: onToggle, exportAs: doExport, results: () => last, render: renderResults, rerun: schedule, setSite, light: () => light };
 }

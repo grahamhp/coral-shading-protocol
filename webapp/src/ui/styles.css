@@ -109,3 +109,7 @@ p,.sub,.kpi .s,.kpi .u,.check .sub,.lead,td{text-wrap:pretty}
 .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin:0 6px 0 2px;vertical-align:-1px;border:1px solid rgba(15,36,51,.15)}
 table.zones td,table.zones th{vertical-align:top}
 table.zones td .sub{margin:0;font-size:11.5px}
+
+textarea.txt{display:block;width:100%;box-sizing:border-box;font-size:12.5px;font-family:ui-monospace,Menlo,Consolas,monospace;resize:vertical}
+input.txt{width:100%;box-sizing:border-box}
+.pair.dt input{font:inherit;font-size:13px;border:1px solid var(--line);border-radius:8px;padding:4px 6px;background:#fbfaf7}.pair.dt input[type=date]{width:128px}.pair.dt input[type=time]{width:78px}
