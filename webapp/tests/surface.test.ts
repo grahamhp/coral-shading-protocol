@@ -24,6 +24,7 @@ test("day light and timing guard match Python", () => {
     const dl = dayLight(c.light === "example" ? ex : cs, c.y, c.m, c.d, c.lat, c.lon, c.tz);
     for (let i = 0; i < c.par_direct_h.length; i++) {
       assert.ok(close(dl.parDirectH[i]!, c.par_direct_h[i]) && close(dl.parDiffuse[i]!, c.par_diffuse[i]), `${c.name} step ${i}`);
+      assert.ok(close(dl.parCircumsolarH![i]!, c.par_circumsolar_h[i]), `${c.name} circumsolar step ${i}`);
     }
     assert.ok(close(dl.lightTotal!, c.light_total) && close(dl.lightDropped!, c.light_dropped), `${c.name} totals`);
   }

@@ -1,6 +1,7 @@
 // Coral P–E model and daily light metrics. Port of python/src/coralshading/pe.py (definitions in its docstring).
 
-export type Acclimation = "none" | "site" | "shade";
+export type Acclimation = "none" | "site" | "shade" | "time";
+export const ACCLIMATION_DAYS = 2.5;   // time constant, days (Anthony and Hoegh-Guldberg 2003: new stable Ik within 5-10 days)
 export interface Coral { ek: number; rOverPg?: number | null; ekEmax?: number | null; acclimate?: Acclimation; label?: string }
 
 export interface PresetFile {
@@ -35,6 +36,24 @@ export function effectiveEk(coral: Coral, days: Float64Array[][], nPoints: numbe
     out.fill(Math.max(coral.ekEmax! * p90Peak(openDays.map((d) => Array.from(d, (v) => [v])), 0), 1.0));
   }
   return out;
+}
+
+/** Ek per day and point. Static modes repeat effectiveEk; "time" starts acclimated to open water ("site") and moves each
+ *  day toward Ek/Emax x that day's peak at the point, exponentially with time constant ACCLIMATION_DAYS (as Python). */
+export function effectiveEkByDay(coral: Coral, days: Float64Array[][], nPoints: number, openDays?: Float64Array[]): Float64Array[] {
+  const mode = coral.ekEmax ? (coral.acclimate ?? "none") : "none";
+  if (mode !== "time") { const e = effectiveEk(coral, days, nPoints, openDays); return days.map(() => e); }
+  if (!openDays) throw new Error("acclimation over time needs the open-water light");
+  const cur = new Float64Array(nPoints).fill(Math.max(coral.ekEmax! * p90Peak(openDays.map((d) => Array.from(d, (v) => [v])), 0), 1.0));
+  const f = 1 - Math.exp(-1 / ACCLIMATION_DAYS);
+  return days.map((day) => {
+    const now = Float64Array.from(cur);
+    for (let p = 0; p < nPoints; p++) {
+      let pk = -Infinity; for (const row of day) pk = Math.max(pk, row[p]!);
+      cur[p] = cur[p]! + f * (Math.max(coral.ekEmax! * pk, 1.0) - cur[p]!);
+    }
+    return now;
+  });
 }
 
 export interface DayMetrics {

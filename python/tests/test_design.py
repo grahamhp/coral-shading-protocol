@@ -31,7 +31,11 @@ def test_to_csv(tmp_path):
 def test_contrast_and_beam_share():
     r = _short()
     d = r.get("dynamic")
-    assert 0.0 < r.beam_share < 0.05                              # Sipaway light, default Kd 0.10 and w0 0.9
+    assert 0.0 < r.beam_share < 1.0
+    hi = design.design(10.4675, 123.4506, 8, (2025, 4, 28), (2025, 4, 30), light="example", spacing=0.2, robustness=False, w0=0.9, kd=0.21)
+    assert hi.beam_share < 0.02 < r.beam_share                     # strong scattering in turbid water: almost no sun beam at 10 m
+    lo, up = d.w0_range_T
+    assert lo < d.transmission < up                                # w0 0.7 lies inside the 0.5-0.9 range
     assert d.contrast["noon"] < d.contrast["side"]                  # the canopy shades noon more than the morning
     assert "sun beam" in r.summary() and "most demanding day" in r.summary()
     hd = d.clearance["h_rule_day"]

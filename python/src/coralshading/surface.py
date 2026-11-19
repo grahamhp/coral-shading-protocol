@@ -13,8 +13,12 @@ Sources (see shared/references.json):
 
 Hourly averages are spread over the day so that each hour keeps exactly its total: within an hour the
 horizontal irradiance follows the cosine of the solar zenith angle (the clear-sky shape), scaled to the
-hour's mean. Direct normal irradiance is then constant within each hour. Identical in
-webapp/src/core/surface.ts.
+hour's mean. Direct normal irradiance is then constant within each hour.
+- Circumsolar sky light (v5.1): part of the diffuse light comes from around the sun. Following Hay and Davies
+  (1980), the share A = DNI / extraterrestrial normal irradiance (the anisotropy index, 0..1) of the diffuse
+  light is treated as coming from the sun's direction; the rest is an isotropic sky. A clear sky has a large A;
+  an overcast sky has A = 0, so all its diffuse light stays isotropic.
+Identical in webapp/src/core/surface.ts.
 """
 from __future__ import annotations
 
@@ -188,6 +192,8 @@ class DayLight:
     wind: np.ndarray           # m s-1 (nan if unknown)
     light_total: float = 0.0   # light in the hourly data for this day (data units x minutes)
     light_dropped: float = 0.0 # part of it dropped by the timing guard (hours brighter than KT_MAX allows)
+    par_circumsolar_h: np.ndarray | None = None   # circumsolar part of the diffuse PAR (horizontal), from the sun's
+                                                   # direction (Hay and Davies 1980); par_diffuse is then the isotropic rest
 
 
 def hourly_window(h: HourlyLight, y: int, m: int, d: int, tz: float):
@@ -223,7 +229,7 @@ def hourly_window(h: HourlyLight, y: int, m: int, d: int, tz: float):
 
 
 def day_light(h: HourlyLight, y: int, m: int, d: int, lat: float, lon: float, tz: float,
-              step: float = 10.0, noon_shift: float = 0.0) -> DayLight:
+              step: float = 10.0, noon_shift: float = 0.0, circumsolar: bool = True) -> DayLight:
     """Surface light for one local day: hourly averages spread with a cos(zenith) shape inside each hour
     (each hour keeps its total exactly), converted to PAR, averaged onto steps of `step` minutes.
     Timing guard: an hour can hold at most KT_MAX times the light arriving on a horizontal plane above the atmosphere
@@ -233,7 +239,7 @@ def day_light(h: HourlyLight, y: int, m: int, d: int, lat: float, lon: float, tz
     day0 = solar.days_from_civil(y, m, d) * 1440.0 - 60.0 * tz
     fine = np.arange(0.5, 1440.0, 1.0)                       # 1-min centers, local time
     cz = np.clip(np.cos(np.radians(solar.sun_with_noon(y, m, d, fine, lat, lon, tz, noon_shift).zenith_geometric)), 0.0, None)
-    g_f = np.zeros_like(fine); b_f = np.zeros_like(fine); w_f = np.full_like(fine, np.nan)
+    g_f = np.zeros_like(fine); b_f = np.zeros_like(fine); w_f = np.full_like(fine, np.nan); a_f = np.zeros_like(fine)
     doy = solar.days_from_civil(y, m, d) - solar.days_from_civil(y, 1, 1) + 1
     cap_unit = 1.0 if h.unit == "W" else PAR_FRACTION * Q_DIRECT     # W m-2 -> umol m-2 s-1 upper bound
     total = dropped = 0.0
@@ -254,12 +260,17 @@ def day_light(h: HourlyLight, y: int, m: int, d: int, lat: float, lon: float, tz
         if mean_s > 0:
             g_f[sel] = G * cz[sel] / mean_s
             b_f[sel] = (G - D) * cz[sel] / mean_s
+            if circumsolar:      # Hay-Davies anisotropy index: DNI over the extraterrestrial normal irradiance
+                dni = (G - D) / mean_s
+                e0n = float(extraterrestrial_horizontal(doy, 1.0)) * cap_unit
+                a_f[sel] = min(max(dni / e0n, 0.0), 1.0) if e0n > 0 else 0.0
         w_f[sel] = W
     d_f = g_f - b_f
     if h.unit == "W":
         pb, pd = to_par(g_f, d_f)
     else:
         pb, pd = b_f, d_f
+    pc = a_f * pd; pd = pd - pc          # circumsolar part of the diffuse PAR; the rest is isotropic
     n = int(round(1440.0 / step))
     agg = lambda a: a.reshape(n, -1).mean(axis=1)
     mins = (np.arange(n) + 0.5) * step
@@ -268,7 +279,8 @@ def day_light(h: HourlyLight, y: int, m: int, d: int, lat: float, lon: float, tz
         __import__("warnings").simplefilter("ignore")
         wind_s = np.nanmean(w_f.reshape(n, -1), axis=1)
     return DayLight(minutes=mins, step=step, zenith=spc.zenith, azimuth=spc.azimuth,
-                    par_direct_h=agg(pb), par_diffuse=agg(pd), wind=wind_s, light_total=total, light_dropped=dropped)
+                    par_direct_h=agg(pb), par_diffuse=agg(pd), wind=wind_s, light_total=total, light_dropped=dropped,
+                    par_circumsolar_h=agg(pc))
 
 
 def utc_offset_from_lon(lon: float) -> int:

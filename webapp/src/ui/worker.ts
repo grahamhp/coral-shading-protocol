@@ -30,7 +30,7 @@ const post = (m: unknown) => (self as unknown as { postMessage: (m: unknown) => 
         // robustness: same designs, varied conditions
         const t0 = performance.now();
         const rob = computeRobustness(msg.inputs, data, { constant: full.scenarios.find((s) => s.kind === "constant")?.panel, dynamic: full.scenarios.find((s) => s.kind === "dynamic")?.panel });
-        for (const s of full.scenarios) s.robustness = rob[s.kind];
+        for (const s of full.scenarios) { s.robustness = rob[s.kind]?.rows; s.w0Range = rob[s.kind]?.range; }
         const ms = performance.now() - t0;
         post({ type: "result", id: msg.id, result: { ...full, level: "robust", ms: full.ms + ms } });
       }

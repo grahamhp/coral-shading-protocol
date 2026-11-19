@@ -92,7 +92,8 @@ def golden_engine() -> dict:
             cases.append(dict(name=name, water=w.__dict__, panels=[p.__dict__ for p in panels], px=px.tolist(), py=py.tolist(),
                               n_facets=nf, day=dict(minutes=d.minutes.tolist(), step=d.step, zenith=d.zenith.tolist(),
                                                     azimuth=d.azimuth.tolist(), par_direct_h=d.par_direct_h.tolist(),
-                                                    par_diffuse=d.par_diffuse.tolist(), wind=[None if not np.isfinite(v) else float(v) for v in d.wind]),
+                                                    par_diffuse=d.par_diffuse.tolist(), wind=[None if not np.isfinite(v) else float(v) for v in d.wind],
+                                                    par_circumsolar_h=None if d.par_circumsolar_h is None else d.par_circumsolar_h.tolist()),
                               tau=st.tau, C0_first=C[0][0].tolist(), S1_first=S[1][0].tolist(),
                               ed=r.ed.tolist(), ed_open=r.ed_open.tolist(), sunlit=r.sunlit.tolist(), dli=r.dli().tolist(),
                               beam_open=r.beam_open.tolist()))
@@ -123,7 +124,43 @@ def golden_scenarios() -> dict:
         b = sc.biology(dyn, pe.Coral.preset(pid, acclimate=acc))
         corals[f"{pid}_{acc}"] = dict(id=pid, acclimate=acc, ek=b["ek"].tolist(), mean=b["mean"], daily=b["daily"])
     summ = pe.summarize(dyn.dli()[0])
-    return dict(days=[list(d) for d in days], water=water.__dict__, target=dict(shape="circle", lx=1.1, ly=1.1),
+    # ---- v5.1: fouling timeline, Kd by date, tide (with a panel reaching the surface), acclimation over time, w0 calibration
+    import numpy as _np
+    from dataclasses import replace as _rep
+    from . import conditions, solar as _sol
+    from .geometry import Panel as _Panel
+    foul = conditions.Fouling(tau_clean=0.21, tau_fouled=0.147, days_to_foul=3.0, clean_every=4, clean_dates=[(2025, 5, 2)])
+    cf = sc.constant_scenario(site, water, tgt, 0.75, days, tau_clean=0.21, spacing=0.2, fouling=foul)
+    rob_f = sc.robustness(site, water, [cf["panel"]], X, Y, days[:2], every=1, tau_days=cf["tau_days"][:2])
+    kd_series = {(2025, 4, 28): 0.15, (2025, 5, 6): 0.30}
+    t0 = _sol.days_from_civil(2025, 4, 27) * 1440.0
+    tt = t0 + 30.0 * _np.arange(int(12 * 1440 / 30))
+    lv = 0.6 * _np.cos(2 * _np.pi * (tt - t0) / 745.2) + 0.1 * _np.sin(2 * _np.pi * (tt - t0) / 1490.4) + 1.3
+    tide = conditions.Tide(t_local=tt, level=lv)
+    sv = _rep(site, kd_series=kd_series, tide=tide)
+    sv.tide_ref = sc.tide_reference(sv, days[0], days[-1])
+    var = sc.run_period(sv, water, [sol.panel], X, Y, days)
+    shallow = engine.Water(0.21, 0.7, 2.0)
+    float_pan = _Panel(lx=1.6, ly=1.4, height=1.8, tau=0.0)
+    var2 = sc.run_period(sv, shallow, [float_pan], X, Y, days[:1])
+    bt = sc.biology(dyn, pe.Coral.preset("typical", acclimate="time"))
+    cal_pan = _Panel(lx=1.2, ly=1.2, height=0.75, tau=0.0)
+    cal = sc.w0_from_reading(0.12, cal_pan, (0.1, 0.0), 0.21, 10.0, (2025, 5, 22), 700.0, ex["lat"], ex["lon"], ex["utc_offset_h"], 0.3, 0.0)
+    cal_w = sc.w0_from_reading(0.12, cal_pan, (0.1, 0.0), 0.21, 10.0, (2025, 5, 22), 700.0, ex["lat"], ex["lon"], ex["utc_offset_h"], 0.25, 6.0)
+    v51 = dict(fouling=dict(tau_clean=0.21, tau_fouled=0.147, days_to_foul=3.0, clean_every=4, clean_dates=[[2025, 5, 2]],
+                            tau_days=cf["tau_days"], T=cf["result"].transmission(), dli_day1=cf["result"].dli()[1].tolist(),
+                            sun_day1=cf["result"].direct_sun_hours()[1].tolist(), robustness=rob_f),
+               kd_series=[[list(k), v] for k, v in kd_series.items()], tide=dict(t_local=tt.tolist(), level=lv.tolist(), ref=sv.tide_ref),
+               var=dict(T=var.transmission(), dli_open=var.dli_open().tolist(), dli_day0=var.dli()[0].tolist(), kd_days=var.kd_days,
+                        depth_day0=var.depth_steps[0].tolist(), beam_share=var.beam_share()),
+               var_surface=dict(water=shallow.__dict__, panel=float_pan.__dict__, dli_day0=var2.dli()[0].tolist(),
+                                dli_open=var2.dli_open().tolist(), sunlit_day0=var2.direct_sun_hours()[0].tolist()),
+               acclimation_time=dict(ek=bt["ek"].tolist(), ek_day2=bt["ek_days"][2].tolist(), mean=bt["mean"]),
+               calibration=dict(ratio=0.12, panel=cal_pan.__dict__, point=[0.1, 0.0], kd=0.21, depth=10.0, date=[2025, 5, 22], minute=700.0,
+                                diffuse=0.3, wind=0.0, result=cal, result_wind=cal_w))
+    ex_c = dict(noon=0.30, side=0.36, ratio=0.30 / 0.36)
+    v51["contrast_warning_example"] = dict(contrast=ex_c, beam=0.008, depth=10.0, text=sc.contrast_warning(ex_c, 0.008, 10.0))
+    return dict(v51=v51, contrast_warning_example=v51["contrast_warning_example"], days=[list(d) for d in days], water=water.__dict__, target=dict(shape="circle", lx=1.1, ly=1.1),
                 cloth=cs["panel"].__dict__, T_constant=Tc, dli_constant_day0=cs["result"].dli()[0].tolist(),
                 solve=dict(lx=sol.panel.lx, ly=sol.panel.ly, T=sol.transmission, iterations=sol.iterations, history=sol.history),
                 T_dynamic_full=dyn.transmission(), direct_hours_day0=dyn.direct_sun_hours()[0].tolist(),
@@ -152,6 +189,7 @@ def golden_surface() -> dict:
         dl = surface.day_light(h if light == "example" else cs, 2025, 6, 10, lat, lon, tz)
         cases.append(dict(name=name, light=light, lat=lat, lon=lon, tz=tz, y=2025, m=6, d=10,
                           par_direct_h=dl.par_direct_h.tolist(), par_diffuse=dl.par_diffuse.tolist(),
+                          par_circumsolar_h=dl.par_circumsolar_h.tolist(),
                           wind=[None if not np.isfinite(v) else float(v) for v in dl.wind],
                           light_total=dl.light_total, light_dropped=dl.light_dropped))
     pairs = [(10.4675, 123.4506, 16.1883, -88.5992), (10.4675, 123.4506, 10.9, 123.5), (-18.0, 147.0, -18.4, 147.3)]

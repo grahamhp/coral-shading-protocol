@@ -11,7 +11,7 @@ const close = (a: number, b: number, tol = 1e-9) => Math.abs(a - b) <= tol * Mat
 
 const toDay = (d: any): DayLight => ({
   minutes: Float64Array.from(d.minutes), step: d.step, zenith: Float64Array.from(d.zenith), azimuth: Float64Array.from(d.azimuth),
-  parDirectH: Float64Array.from(d.par_direct_h), parDiffuse: Float64Array.from(d.par_diffuse),
+  parDirectH: Float64Array.from(d.par_direct_h), parDiffuse: Float64Array.from(d.par_diffuse), ...(d.par_circumsolar_h ? { parCircumsolarH: Float64Array.from(d.par_circumsolar_h) } : {}),
   wind: Float64Array.from(d.wind, (v: number | null) => (v === null ? NaN : v)),
 });
 

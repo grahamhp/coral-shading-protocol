@@ -138,6 +138,8 @@ export interface DayLight {
   parDirectH: Float64Array; parDiffuse: Float64Array; wind: Float64Array;
   lightTotal?: number; // light in the hourly data for this day (data units x minutes)
   lightDropped?: number; // part of it dropped by the timing guard
+  parCircumsolarH?: Float64Array; // circumsolar part of the diffuse PAR, from the sun's direction (Hay and Davies 1980);
+                                  // parDiffuse is then the isotropic rest
 }
 
 export function hourlyWindow(h: HourlyLight, y: number, m: number, d: number, tz: number) {
@@ -164,13 +166,14 @@ export function hourlyWindow(h: HourlyLight, y: number, m: number, d: number, tz
   return { centers, ghi: idx.map((i) => h.ghi[i]!), dhi: idx.map((i) => h.dhi[i]!), wind: idx.map((i) => (h.wind ? h.wind[i]! : NaN)) };
 }
 
-export function dayLight(h: HourlyLight, y: number, m: number, d: number, lat: number, lon: number, tz: number, step = 10, noonShift = 0): DayLight {
+export function dayLight(h: HourlyLight, y: number, m: number, d: number, lat: number, lon: number, tz: number, step = 10, noonShift = 0,
+  circumsolar = true): DayLight {
   const { centers, ghi, dhi, wind } = hourlyWindow(h, y, m, d, tz);
   const day0 = daysFromCivil(y, m, d) * 1440 - 60 * tz;
   const N = 1440;
   const cz = new Float64Array(N);
   for (let i = 0; i < N; i++) cz[i] = Math.max(0, Math.cos((sunWithNoon(y, m, d, i + 0.5, lat, lon, tz, noonShift).zenithGeometric * Math.PI) / 180));
-  const gF = new Float64Array(N), bF = new Float64Array(N), wF = new Float64Array(N).fill(NaN);
+  const gF = new Float64Array(N), bF = new Float64Array(N), wF = new Float64Array(N).fill(NaN), aF = new Float64Array(N);
   const doy = daysFromCivil(y, m, d) - daysFromCivil(y, 1, 1) + 1;
   const capUnit = h.unit === "W" ? 1 : PAR_FRACTION * Q_DIRECT; // W m-2 -> umol m-2 s-1 upper bound
   let total = 0, dropped = 0;
@@ -185,30 +188,35 @@ export function dayLight(h: HourlyLight, y: number, m: number, d: number, lat: n
     total += G * inside;
     const cap = KT_MAX * extraterrestrialHorizontal(doy, meanS) * capUnit;
     if (G > cap) { dropped += (G - cap) * inside; D = G > 0 ? (D * cap) / G : 0; G = cap; } // data and sun disagree
+    // Hay-Davies anisotropy index: DNI over the extraterrestrial normal irradiance (0..1)
+    let A = 0;
+    if (circumsolar && meanS > 0) { const e0n = extraterrestrialHorizontal(doy, 1.0) * capUnit; A = e0n > 0 ? Math.min(Math.max((G - D) / meanS / e0n, 0), 1) : 0; }
     for (let i = i0; i < i1; i++) {
-      if (meanS > 0) { gF[i] = (G * cz[i]!) / meanS; bF[i] = ((G - D) * cz[i]!) / meanS; }
+      if (meanS > 0) { gF[i] = (G * cz[i]!) / meanS; bF[i] = ((G - D) * cz[i]!) / meanS; aF[i] = A; }
       wF[i] = wind[k]!;
     }
   }
   const n = Math.round(1440 / step), per = N / n;
   const mins = new Float64Array(n), zen = new Float64Array(n), az = new Float64Array(n);
-  const pb = new Float64Array(n), pd = new Float64Array(n), ws = new Float64Array(n);
+  const pb = new Float64Array(n), pd = new Float64Array(n), pc = new Float64Array(n), ws = new Float64Array(n);
   for (let s = 0; s < n; s++) {
-    let sb = 0, sd = 0, sw = 0, cw = 0;
+    let sb = 0, sd = 0, sc = 0, sw = 0, cw = 0;
     for (let j = 0; j < per; j++) {
       const i = s * per + j;
       let b: number, dd: number;
       if (h.unit === "W") [b, dd] = toPar(gF[i]!, gF[i]! - bF[i]!);
       else { b = bF[i]!; dd = gF[i]! - bF[i]!; }
-      sb += b; sd += dd;
+      const c = aF[i]! * dd;
+      sb += b; sd += dd - c; sc += c;
       if (!Number.isNaN(wF[i]!)) { sw += wF[i]!; cw++; }
     }
-    pb[s] = sb / per; pd[s] = sd / per; ws[s] = cw ? sw / cw : NaN;
+    pb[s] = sb / per; pd[s] = sd / per; pc[s] = sc / per; ws[s] = cw ? sw / cw : NaN;
     mins[s] = (s + 0.5) * step;
     const sp = sunWithNoon(y, m, d, mins[s]!, lat, lon, tz, noonShift);
     zen[s] = sp.zenith; az[s] = sp.azimuth;
   }
-  return { minutes: mins, step, zenith: zen, azimuth: az, parDirectH: pb, parDiffuse: pd, wind: ws, lightTotal: total, lightDropped: dropped };
+  return { minutes: mins, step, zenith: zen, azimuth: az, parDirectH: pb, parDiffuse: pd, wind: ws, lightTotal: total, lightDropped: dropped,
+    parCircumsolarH: pc };
 }
 
 /** Extraterrestrial irradiance on a horizontal plane (W m-2). */

@@ -11,6 +11,8 @@ Method (checked against the 3-D Monte Carlo in mc.backward_point; see tests and 
    removed when the refracted sun rays (one per wave facet) pass through a panel.
 3. Light scattered inside the water between a panel and the point is not modelled separately; against the
    3-D Monte Carlo this makes shaded points read about 0.01 of open-water light too high.
+4. Circumsolar sky light (surface.day_light, Hay and Davies 1980) is treated as part of the sun's light; the rest
+   of the sky is isotropic.
 Identical in webapp/src/core/engine.ts.
 """
 from __future__ import annotations
@@ -104,11 +106,12 @@ def optical_depth_for_kd(water: Water, tables: dict | None = None) -> float:
     return float(math.exp((1 - f) * math.log(taus[j]) + f * math.log(taus[j + 1])))
 
 
-def optical_state(water: Water, tables: dict | None = None) -> OpticalState:
+def optical_state(water: Water, tables: dict | None = None, tau: float | None = None) -> OpticalState:
     """Interpolate the tables to this water column: totals and beam log-linearly (light falls off roughly
-    exponentially), angular shapes (coefficients divided by the totals) linearly; both in w0 and log(tau)."""
+    exponentially), angular shapes (coefficients divided by the totals) linearly; both in w0 and log(tau).
+    tau (optical depth c z) is found from water.kd and water.depth unless given (v5.1: tide and daily Kd)."""
     t = tables or load_tables()
-    tau = optical_depth_for_kd(water, t)
+    tau = optical_depth_for_kd(water, t) if tau is None else float(tau)
     lg = lambda x: np.log(np.clip(x, 1e-300, None))
     sun_tot_tw = np.moveaxis(t["_sun_total"], 2, 1)                                    # [w0, tau, sunz]
     tot = np.exp(_interp_w0_tau(lg(sun_tot_tw), t, water.w0, tau))                    # [sunz]
@@ -171,8 +174,11 @@ def _interp_sunz(st: OpticalState, zen_deg):
 
 
 def run_day(day, water: Water, panels, points_x, points_y, n_facets: int = 64, state: OpticalState | None = None,
-            moments=None) -> DayResult:
-    """Light at each point through one day. `day` is a surface.DayLight."""
+            moments=None, step_states=None, step_depths=None, moments_at=None) -> DayResult:
+    """Light at each point through one day. `day` is a surface.DayLight.
+    v5.1: step_states (one OpticalState per time step) and step_depths (m, per step) let the water column change
+    through the day (tide, daily Kd); moments_at(depth) gives the panel moments for a depth when a panel can reach
+    the surface. Circumsolar sky light (day.par_circumsolar_h) travels with the sun."""
     st = state or optical_state(water)
     C, S = moments if moments is not None else panel_moments(points_x, points_y, panels, water, st.theta_edges)
     px = np.asarray(points_x, float); py = np.asarray(points_y, float)
@@ -181,12 +187,27 @@ def run_day(day, water: Water, panels, points_x, points_y, n_facets: int = 64, s
     ed = np.zeros((nt, npnt)); ed_open = np.zeros(nt); sunlit = np.zeros((nt, npnt)); beam_part = np.zeros((nt, npnt))
     beam_open = np.zeros(nt)
     T_sky = optics.sky_transmittance()
-    beam_z, A_z = _interp_sunz(st, day.zenith)
-    sky_masked = (st.sky_A0[None, :] * C[0]).sum(axis=1)                      # [point]
+    circ = day.par_circumsolar_h if getattr(day, "par_circumsolar_h", None) is not None else np.zeros(nt)
+    if step_states is None:
+        beam_z, A_z = _interp_sunz(st, day.zenith)
+        sky_masked = (st.sky_A0[None, :] * C[0]).sum(axis=1)                  # [point]
+    cache = {}
     for k in np.where(up)[0]:
         wind = day.wind[k] if np.isfinite(day.wind[k]) else 0.0
         dirs, wts, T_sun = optics.refracted_sun_rays(float(day.zenith[k]), float(day.azimuth[k]), wind, n_facets)
-        Fs = day.par_direct_h[k] * T_sun; Fk = day.par_diffuse[k] * T_sky
+        Fs = (day.par_direct_h[k] + circ[k]) * T_sun; Fk = day.par_diffuse[k] * T_sky
+        dk = water.depth if step_depths is None else float(step_depths[k])
+        if step_states is None:
+            stk, bk, Ak, Ck, Sk, skm = st, beam_z[k], A_z[k], C, S, sky_masked
+        else:
+            stk = step_states[k]
+            Ck, Sk = (C, S) if moments_at is None else moments_at(dk)
+            key = (id(stk), id(Ck))
+            if key not in cache:
+                cache[key] = (stk.sky_A0[None, :] * Ck[0]).sum(axis=1)
+            skm = cache[key]
+            bz, Az = _interp_sunz(stk, np.array([day.zenith[k]]))
+            bk, Ak = bz[0], Az[0]
         # sun beam visibility: average over facets of panel transmission along each refracted ray
         sa = math.radians(day.azimuth[k]); za = math.radians(min(day.zenith[k], 89.9))
         air = (math.sin(za) * math.sin(sa), math.sin(za) * math.cos(sa), math.cos(za))
@@ -194,17 +215,16 @@ def run_day(day, water: Water, panels, points_x, points_y, n_facets: int = 64, s
             vis = np.zeros(npnt)
             for d, wf in zip(dirs, wts):
                 if wf > 0:
-                    vis += wf * transmission_along(px, py, d, panels, water.depth, air_dir=air)
+                    vis += wf * transmission_along(px, py, d, panels, dk, air_dir=air)
         else:
             vis = np.ones(npnt)
         phis = math.radians(day.azimuth[k])
-        Ak = A_z[k]                                                               # [m, theta]
         broad = np.zeros(npnt)
         for m in range(Ak.shape[0]):
-            broad += (Ak[m][None, :] * (math.cos(m * phis) * C[m] + math.sin(m * phis) * S[m])).sum(axis=1)
-        sun_open = beam_z[k] + 2 * math.pi * Ak[0].sum()
-        ed[k] = Fs * (beam_z[k] * vis + broad) + Fk * sky_masked
-        ed_open[k] = Fs * sun_open + Fk * 2 * math.pi * st.sky_A0.sum()
-        sunlit[k] = vis; beam_part[k] = Fs * beam_z[k] * vis; beam_open[k] = Fs * beam_z[k]
+            broad += (Ak[m][None, :] * (math.cos(m * phis) * Ck[m] + math.sin(m * phis) * Sk[m])).sum(axis=1)
+        sun_open = bk + 2 * math.pi * Ak[0].sum()
+        ed[k] = Fs * (bk * vis + broad) + Fk * skm
+        ed_open[k] = Fs * sun_open + Fk * 2 * math.pi * stk.sky_A0.sum()
+        sunlit[k] = vis; beam_part[k] = Fs * bk * vis; beam_open[k] = Fs * bk
     return DayResult(minutes=day.minutes, step=day.step, ed=ed, ed_open=ed_open, sunlit=sunlit, beam_part=beam_part, beam_open=beam_open,
                      meta=dict(tau=st.tau, kd=water.kd, w0=water.w0, depth=water.depth))

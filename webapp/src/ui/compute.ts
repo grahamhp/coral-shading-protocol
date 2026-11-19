@@ -4,9 +4,11 @@ import { opticalState } from "../core/engine.ts";
 import { type Panel, type Target, panel, targetGrid } from "../core/geometry.ts";
 import { type HourlyLight, utcOffsetFromLon } from "../core/surface.ts";
 import { solarNoon } from "../core/solar.ts";
-import { type Day, type Site, type PeriodResult, type Contrast, deploymentDays, constantScenario, solveDynamic, runPeriod, transmission,
-  directSunHours, dliPerDay, dliOpenPerDay, clearanceCheck, robustness, biology, beamShare, noonContrast, contrastWarning } from "../core/scenarios.ts";
+import { type Day, type Site, type PeriodResult, type Contrast, deploymentDays, constantScenario, solveDynamic, runPeriod, periodFor, clothTauDays,
+  transmission, directSunHours, dliPerDay, dliOpenPerDay, clearanceCheck, robustness, biology, beamShare, noonContrast, contrastWarning,
+  tideReference } from "../core/scenarios.ts";
 import { type PresetFile, type Acclimation, type Coral, coralFromPreset } from "../core/pe.ts";
+import { type Fouling, kdSeriesFromCsv, tideFromCsv, cleanDatesFromText } from "../core/conditions.ts";
 
 export type ScenarioChoice = "constant" | "dynamic" | "both";
 
@@ -15,11 +17,14 @@ export interface Inputs {
   start: Day; end: Day;
   target: Target;
   depth: number; height: number;
-  water: { kd: number; w0: number };
+  water: { kd: number; w0: number; w0Lo: number; w0Hi: number };   // w0 for the design; range shown with results
   scenario: ScenarioChoice;
   sync: boolean;                       // dynamic sized to give the cloth's light
   clothRating: number;                 // % blocked (simple mode): tau = 1 - rating/100
-  tauClean?: number; tauFouled?: number; fouledShare?: number;   // expert
+  tauClean?: number; tauFouled?: number; fouledShare?: number;   // expert (fouledShare: older fixed share of time fouled)
+  fouling?: { tauClean: number; tauFouled: number; daysToFoul: number; cleanEvery: number; cleanDates: string } | null;   // timeline
+  kdSeriesText?: string | null;        // 'date, Kd' rows (Kd by date), or null
+  tideText?: string | null;            // 'local date time, level (m)' rows, or null
   clothSize?: { lx: number; ly: number } | null;                  // null = automatic
   dynamicTargetReduction: number;      // % (used when not synced, or when the scenario is dynamic only)
   canopy?: { lx: number; ly: number; cx: number; cy: number; rot: number } | null;   // null = solve
@@ -45,6 +50,8 @@ export interface ScenarioOut {
   clearance?: { share: number; hRule: number; hRuleDay: Day; hMin: number; never: number[] };
   contrast?: Contrast;                 // light at noon and in the morning and afternoon, shares of open water
   robustness?: { case: string; T: number }[];
+  w0Range?: [number, number];          // period transmission at the low and high end of the w0 range (same structure)
+  tauDays?: number[] | null;           // cloth transmission by day (fouling)
   solve?: { feasible: boolean; message: string; iterations: number };
 }
 
@@ -64,6 +71,8 @@ export interface Results {
   warnings: string[];
   timings: Record<string, number>;
   beamShare: number;                   // share of the open-water light at depth that arrives as the sun beam
+  kdDays: number[];                    // Kd used on each day
+  depthNoon: number[] | null;          // coral depth at solar noon on each day (tide), or null
 }
 
 export interface Data { tables: Tables; presets: PresetFile; light: HourlyLight }
@@ -95,10 +104,23 @@ function summarizeScenario(kind: "constant" | "dynamic", pan: Panel, r: PeriodRe
     east: r.ed.map((day) => day.map((row) => row[iE]!)), west: r.ed.map((day) => day.map((row) => row[iW]!)) };
   const b = biology(r, coral);
   return { kind, panel: pan, T: transmission(r), dliMean: pointDli.reduce((a, v) => a + v, 0) / nP, pointDli, pointSunHours: pointSun,
-    dayReduction, dayCurve, dayCurves, bio: b.mean, ek: b.ek[0]! };
+    dayReduction, dayCurve, dayCurves, bio: b.mean, ek: b.ek.reduce((a, v) => a + v, 0) / b.ek.length };
 }
 
 const now = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
+
+/** The site with its light data and, when given, Kd by date and the tide (mean level over the whole deployment). */
+export function siteFrom(inp: Inputs, data: Data): Site {
+  const site: Site = { lat: inp.site.lat, lon: inp.site.lon, tz: inp.site.tz, light: data.light, noonShift: inp.noonShift, step: 10 };
+  if (inp.kdSeriesText) site.kdSeries = kdSeriesFromCsv(inp.kdSeriesText);
+  if (inp.tideText) { site.tide = tideFromCsv(inp.tideText); site.tideRef = tideReference(site.tide, inp.start, inp.end); }
+  return site;
+}
+
+export function foulingFrom(inp: Inputs): Fouling | null {
+  const f = inp.fouling;
+  return f ? { tauClean: f.tauClean, tauFouled: f.tauFouled, daysToFoul: f.daysToFoul, cleanEvery: Math.round(f.cleanEvery), cleanDates: cleanDatesFromText(f.cleanDates ?? "") } : null;
+}
 
 export function compute(inp: Inputs, data: Data, level: "preview" | "full" | "robust", guess?: number): Results {
   const t0 = now();
@@ -106,9 +128,10 @@ export function compute(inp: Inputs, data: Data, level: "preview" | "full" | "ro
   const tm: Record<string, number> = {};
   let tl = t0;
   const lap = (k: string) => { const t = now(); tm[k] = (tm[k] ?? 0) + t - tl; tl = t; };
-  const site: Site = { lat: inp.site.lat, lon: inp.site.lon, tz: inp.site.tz, light: data.light, noonShift: inp.noonShift, step: 10 };
   const all = deploymentDays(inp.start, inp.end, 1);
   if (all.length === 0) throw new Error("The deployment ends before it starts.");
+  const site = siteFrom(inp, data);
+  const fouling = foulingFrom(inp);
   const every = level === "preview" ? Math.max(1, Math.ceil(all.length / 10)) : 1;
   const days = all.filter((_, i) => i % every === 0);
   const spacing = level === "preview" ? Math.max(inp.gridSpacing, 0.15) : inp.gridSpacing;
@@ -127,17 +150,16 @@ export function compute(inp: Inputs, data: Data, level: "preview" | "full" | "ro
   const runs: PeriodResult[] = [];
   let Tc: number | null = null;
   if (inp.scenario !== "dynamic") {
-    const tauC = inp.tauClean ?? 1 - inp.clothRating / 100;
+    const tauC = fouling ? fouling.tauClean : inp.tauClean ?? 1 - inp.clothRating / 100;
     const cloth = inp.clothSize ? panel({ lx: inp.clothSize.lx, ly: inp.clothSize.ly, height: inp.height, tau: tauC }) : undefined;
-    const cs = constantScenario(site, water, inp.target, inp.height, days, data.tables, tauC, inp.tauFouled, inp.fouledShare ?? 0, cloth, spacing, nFacets, wind);
+    const cs = constantScenario(site, water, inp.target, inp.height, days, data.tables, tauC, inp.tauFouled, inp.fouledShare ?? 0, cloth, spacing, nFacets, wind, fouling);
     lap("constant run");
     const so = summarizeScenario("constant", cs.panel, cs.result, pts, coral, inp.target);
     so.contrast = noonContrast(cs.result, site);
+    so.tauDays = cs.tauDays;
     runs.push(cs.result);
     Tc = so.T; openRes = cs.result;
     lap("constant summary");
-    if (level === "robust") so.robustness = robustness(site, water, [cs.panel], targetGrid(inp.target, 0.1), all, data.tables, 16, [0.5, 1.5], [0.5, 0.9], [0, 10], 0.2, 1);
-    lap("robustness");
     out.push(so);
   }
   if (inp.scenario !== "constant") {
@@ -168,8 +190,6 @@ export function compute(inp: Inputs, data: Data, level: "preview" | "full" | "ro
       warnings.push(`${Math.round(100 * chk.shareNeverSunlit)} % of the coral area never has the sun in line under the canopy. A canopy about ${chk.hForSunBy0800ShadeFrom1000.toFixed(1)} m above the corals would let the morning sun reach all of it on every day.`);
     const cw = contrastWarning(so.contrast, beamShare(r), inp.depth);
     if (cw) warnings.push(cw);
-    if (level === "robust") so.robustness = robustness(site, water, [pan], targetGrid(inp.target, 0.1), all, data.tables, 16, [0.5, 1.5], [0.5, 0.9], [0, 10], 0.2, 1);
-    lap("robustness");
     openRes = openRes ?? r;
     out.push(so);
   }
@@ -194,7 +214,10 @@ export function compute(inp: Inputs, data: Data, level: "preview" | "full" | "ro
       dayCurves: o.edOpen.map((dd) => Array.from(dd)), lightHist: openHist },
     minutes: Array.from(o.minutes[0]!), noon: solarNoon(y, m, d, inp.site.lon, inp.site.tz) + inp.noonShift,
     noons: days.map(([yy, mm, dd]) => solarNoon(yy, mm, dd, inp.site.lon, inp.site.tz) + inp.noonShift), histMax,
-    scenarios: out, warnings, timings: tm, beamShare: beamShare(o),
+    scenarios: out, warnings, timings: tm, beamShare: beamShare(o), kdDays: o.kdDays ?? days.map(() => inp.water.kd),
+    depthNoon: o.depthSteps && o.depthSteps.length ? o.depthSteps.map((z, i) => {
+      const nn = solarNoon(days[i]![0], days[i]![1], days[i]![2], inp.site.lon, inp.site.tz) + inp.noonShift;
+      return z[Math.min(z.length - 1, Math.max(0, Math.floor(nn / o.step)))]!; }) : null,
     lightNotes: lightWarnings(data.light, inp.site.lon, inp.site.tz, inp.start, Math.max(0, ...runs.map((rr) => rr.lightDropped ?? 0))),
   };
 }
@@ -217,13 +240,22 @@ export function lightWarnings(h: HourlyLight, lon: number, tz: number, start: Da
   return out;
 }
 
-/** Robustness only (third stage): the designs are fixed; conditions vary. */
-export function computeRobustness(inp: Inputs, data: Data, panels: { constant?: Panel; dynamic?: Panel }): Record<string, { case: string; T: number }[]> {
-  const site: Site = { lat: inp.site.lat, lon: inp.site.lon, tz: inp.site.tz, light: data.light, noonShift: inp.noonShift, step: 10 };
+/** Third stage: the designs are fixed; conditions vary. Robustness table (10 cm grid) and the w0 range (the reported grid). */
+export function computeRobustness(inp: Inputs, data: Data, panels: { constant?: Panel; dynamic?: Panel }):
+  Record<string, { rows: { case: string; T: number }[]; range: [number, number] }> {
+  const site = siteFrom(inp, data);
   const all = deploymentDays(inp.start, inp.end, 1);
   const water: Water = { kd: inp.water.kd, w0: inp.water.w0, depth: inp.depth };
-  const every = 1, pts = targetGrid(inp.target, 0.1);   // every day
-  const out: Record<string, { case: string; T: number }[]> = {};
-  for (const [k, p] of Object.entries(panels)) if (p) out[k] = robustness(site, water, [p], pts, all, data.tables, 16, [0.5, 1.5], [0.5, 0.9], [0, 10], 0.2, every);
+  const lo = Math.min(inp.water.w0Lo, inp.water.w0Hi), hi = Math.max(inp.water.w0Lo, inp.water.w0Hi);
+  const pts10 = targetGrid(inp.target, 0.1), pts = targetGrid(inp.target, inp.gridSpacing), wind = inp.wind ?? undefined;
+  const fouling = foulingFrom(inp);
+  const out: Record<string, { rows: { case: string; T: number }[]; range: [number, number] }> = {};
+  for (const [k, p] of Object.entries(panels)) {
+    if (!p) continue;
+    const td = k === "constant" ? clothTauDays(all, p.tau, inp.tauFouled, inp.fouledShare ?? 0, fouling) : null;
+    const rows = robustness(site, water, [p], pts10, all, data.tables, 16, [0.5, 1.5], [lo, hi], [0, 10], 0.2, 1, td);
+    const T = (w0: number) => transmission(periodFor(site, { ...water, w0 }, [p], pts, all, data.tables, 16, wind, td));
+    out[k] = { rows, range: [T(lo), T(hi)] };
+  }
   return out;
 }

@@ -63,8 +63,24 @@ def test_day_conserves_hourly_totals(ymd):
         frac = cz[(mins >= 0) & (mins < 1440)].sum() / cz.sum()
         b, dd = surface.to_par(G, D)
         exp += (float(b) + float(dd)) * 60 * frac
-    got = (dl.par_direct_h + dl.par_diffuse).sum() * 10.0
+    got = (dl.par_direct_h + dl.par_diffuse + dl.par_circumsolar_h).sum() * 10.0
     assert got == pytest.approx(exp, rel=1e-9)
+
+
+def test_circumsolar_split():
+    """Hay-Davies: the circumsolar part is the anisotropy index A = DNI / extraterrestrial normal times the diffuse
+    light; switching it off returns the same total diffuse light, all isotropic."""
+    t = _read("pvgis_tmy_sipaway.csv")
+    on = surface.day_light(t, 2025, 5, 2, LAT, LON, TZ)
+    off = surface.day_light(t, 2025, 5, 2, LAT, LON, TZ, circumsolar=False)
+    assert np.allclose(on.par_diffuse + on.par_circumsolar_h, off.par_diffuse, rtol=1e-12, atol=1e-9)
+    assert np.allclose(on.par_direct_h, off.par_direct_h) and off.par_circumsolar_h.sum() == 0
+    share = on.par_circumsolar_h.sum() / off.par_diffuse.sum()
+    assert 0.0 < share < 1.0
+    # an overcast hour (no beam) has no circumsolar light
+    h = surface.HourlyLight(t_utc=t.t_utc, ghi=t.dhi.copy(), dhi=t.dhi.copy(), kind="tmy", lat=t.lat, lon=t.lon)
+    oc = surface.day_light(h, 2025, 5, 2, LAT, LON, TZ)
+    assert oc.par_circumsolar_h.sum() == 0.0
 
 
 def test_first_of_month_keeps_morning():
@@ -116,7 +132,7 @@ def test_timing_guard_drops_light_that_cannot_match_the_sun():
     far = surface.day_light(h, 2025, 6, 10, *BELIZE, -6)
     assert far.light_dropped / far.light_total > 0.5
     # nothing brighter than the light above the atmosphere (as PAR) at any step
-    tot = far.par_direct_h + far.par_diffuse
+    tot = far.par_direct_h + far.par_diffuse + far.par_circumsolar_h
     assert tot.max() < surface.SOLAR_CONSTANT * 1.04 * surface.PAR_FRACTION * surface.Q_DIRECT
 
 
@@ -126,6 +142,7 @@ def test_clear_sky_year():
     k = solar.days_from_civil(2001, 6, 10) - solar.days_from_civil(2001, 1, 1)
     assert cs.ghi[k * 24 + 6:k * 24 + 30].sum() / 1000 == pytest.approx(8.14, abs=0.02)   # pvlib Haurwitz: 8.141 kWh m-2
     dl = surface.day_light(cs, 2025, 6, 10, *BELIZE, -6)
-    assert dl.light_dropped == 0.0 and 0.15 < dl.par_diffuse.sum() / (dl.par_direct_h + dl.par_diffuse).sum() < 0.3
+    dif = dl.par_diffuse + dl.par_circumsolar_h
+    assert dl.light_dropped == 0.0 and 0.15 < dif.sum() / (dl.par_direct_h + dif).sum() < 0.3
     assert surface.distance_km(LAT, LON, *BELIZE) == pytest.approx(15420, rel=0.01)
     assert surface.utc_offset_from_lon(LON) == 8 and surface.utc_offset_from_lon(BELIZE[1]) == -6 and surface.utc_offset_from_lon(7.5) == 1
