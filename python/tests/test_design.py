@@ -21,8 +21,21 @@ def test_design_sync_and_summary():
 def test_to_csv(tmp_path):
     files = _short().to_csv(tmp_path)
     assert len(files) == 2
-    head = open(files[0], encoding="utf-8").readline()
-    assert head.startswith("x_east_m,y_north_m,constant_daily_light")
+    lines = open(files[0], encoding="utf-8").read().splitlines()
+    assert lines[0].startswith("# Coral Shading Protocol") and "fixed depth" in lines[0] and "typical-year day" in lines[0]
+    assert lines[1].startswith("x_east_m,y_north_m,constant_daily_light") and "constant_sun_in_line_h" in lines[1]
+    days = open(files[1], encoding="utf-8").read().splitlines()
+    assert days[1].startswith("date,weather,") and days[2].split(",")[1] == "typical-year day"
+
+
+def test_contrast_and_beam_share():
+    r = _short()
+    d = r.get("dynamic")
+    assert 0.0 < r.beam_share < 0.05                              # Sipaway light, default Kd 0.10 and w0 0.9
+    assert d.contrast["noon"] < d.contrast["side"]                  # the canopy shades noon more than the morning
+    assert "sun beam" in r.summary() and "most demanding day" in r.summary()
+    hd = d.clearance["h_rule_day"]
+    assert tuple(hd) in [tuple(x) for x in d.period.days]
 
 
 def test_cli_runs(capsys):

@@ -122,17 +122,31 @@ over the deployment ÷ open-water daily light summed.
   tan(refracted zenith). East–west width solved so that T meets the target: the cloth's T ("same daily light",
   as in the Sipaway experiment) or a reduction the user sets. The match is in light summed over the deployment, not day by
   day: on clear days dynamic shading gives slightly less light than constant shading, on cloudy days more, because
-  a narrow canopy blocks less of the diffuse light from a cloudy sky. Solver: Illinois (modified regula falsi) on about 20
-  evenly spaced days (every ⌈n/20⌉th day) on a 10 cm grid, then one secant step using all days. If even a 12 m canopy lets too much light through, the closest
-  design is shown with the reason.
-- **Clearance check.** Points with less than 0.1 h of direct sun on every day are mapped (a point is sunlit
-  when at least half of the facet-weighted beam reaches it). For a
+  a narrow canopy blocks less of the diffuse light from a cloudy sky. Solver: Illinois (modified regula falsi) on
+  every day of the deployment and on the reported grid (v5.1; v5.0 used about 20 days on a 10 cm grid and a
+  correction step, which moved the result by 0.05 percentage points at Sipaway). If even a 12 m canopy lets too
+  much light through, the closest design is shown with the reason.
+- **Light at noon and in the morning and afternoon (v5.1).** For each design: area-mean light ÷ open water within
+  1 h of solar noon, and 3 h or more from solar noon with the sun more than 10° up, summed over every day. Also
+  the share of open-water light at depth that arrives as the sun beam (within 3° of the refracted sun). Where
+  scattering dominates (high ω₀, deep or turbid water), an opaque canopy blocks scattered light at every hour and
+  cannot shade noon much more than the morning; a CHECK appears when dynamic shading's noon light exceeds 0.8 of
+  its morning and afternoon light. At Sipaway (Kd 0.21, 10 m, ω₀ 0.9) the beam carries under 1 % of the light.
+- **Clearance check.** Points with less than 0.1 h with the sun in line on every day are mapped (the sun is in
+  line when at least half of the facet-weighted beam reaches the point). This is geometry: clouds and scattering
+  are not counted, so it says little about light dose where the beam carries little light. For a
   target of radius R and a sun moving roughly east–west, the whole target is sunlit while H tan θ_w ≥ a + R and
   shaded while H tan θ_w ≤ a − R (a = canopy half-width), so both need H ≥ 2R / (tan θ_w,lit − tan θ_w,shade).
   Because tan θ_w < 1.12 under a flat sea, any full clearance needs H ≥ 1.78 R. The app shows the H needed for
-  the target to be fully sunlit 4 h before noon and fully shaded from 2 h before noon on the first day.
+  the target to be fully sunlit 4 h before noon and fully shaded from 2 h before noon on the most demanding day
+  of the deployment (v5.1; v5.0 used the first day: 2.56 m against 2.74 m around the June solstice at Sipaway).
 - **Robustness.** T recomputed with Kd × 0.5 and × 1.5, ω₀ 0.5 and 0.9, wind 0 and 10 m s⁻¹, and the structure
-  shifted 0.2 m east or north, on about 12 evenly spaced days (every ⌈n/12⌉th day) and a 10 cm grid.
+  shifted 0.2 m east or north, on every day and a 10 cm grid (v5.1; v5.0 used about 12 days, within 0.08
+  percentage points).
+- **Held fixed for every day.** One Kd and one depth (no tide) for the whole deployment, and one Ek; with a typical
+  year, each date is one typical-year day, not that year's weather. Light ratios between designs are insensitive
+  to these (Sipaway: Kd × 0.5–1.5 moves them at most 2.7 points, ±0.75 m of depth under 0.3 points, real years
+  2014–2023 under 0.11 points), but absolute daily light and the coral metrics are not. Exports state this.
 
 ## 7. Corals
 

@@ -163,8 +163,13 @@
  ],
  "clearance": {
   "share": 0.0,
-  "h_rule": 2.5553499883710042,
-  "h_min": 0.9790000000000001
+  "h_rule": 2.587347784327542,
+  "h_min": 0.9790000000000001,
+  "h_rule_day": [
+   2025,
+   5,
+   6
+  ]
  },
  "robustness": [
   {
@@ -804,5 +809,27 @@
   "max": 2.154023922202928,
   "p10": 0.9271796430821087,
   "p90": 2.032837565989914
+ },
+ "beam_share": 0.105777622449777,
+ "contrast_dynamic": {
+  "noon": 0.19788458687135932,
+  "side": 0.39019223870831227,
+  "ratio": 0.5071463941118719
+ },
+ "contrast_constant": {
+  "noon": 0.25743678343239185,
+  "side": 0.29545549909354624,
+  "ratio": 0.8713216854050937
+ },
+ "contrast_warning": null,
+ "contrast_warning_example": {
+  "contrast": {
+   "noon": 0.3,
+   "side": 0.36,
+   "ratio": 0.8333333333333334
+  },
+  "beam": 0.008,
+  "depth": 10.0,
+  "text": "Dynamic shading barely changes through the day here: at noon the corals get 30 % of open-water light, in the morning and afternoon 36 %. Only 0.8 % of the light at 10 m arrives as the sun beam; the rest is scattered light from all directions, which the canopy blocks at every hour. A stronger midday contrast needs less scattering water (lower w0), a shallower site or a wider canopy, which also gives less light overall."
  }
 }

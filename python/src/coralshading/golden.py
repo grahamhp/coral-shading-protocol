@@ -94,7 +94,8 @@ def golden_engine() -> dict:
                                                     azimuth=d.azimuth.tolist(), par_direct_h=d.par_direct_h.tolist(),
                                                     par_diffuse=d.par_diffuse.tolist(), wind=[None if not np.isfinite(v) else float(v) for v in d.wind]),
                               tau=st.tau, C0_first=C[0][0].tolist(), S1_first=S[1][0].tolist(),
-                              ed=r.ed.tolist(), ed_open=r.ed_open.tolist(), sunlit=r.sunlit.tolist(), dli=r.dli().tolist()))
+                              ed=r.ed.tolist(), ed_open=r.ed_open.tolist(), sunlit=r.sunlit.tolist(), dli=r.dli().tolist(),
+                              beam_open=r.beam_open.tolist()))
     return dict(cases=cases)
 
 
@@ -114,6 +115,7 @@ def golden_scenarios() -> dict:
     X, Y = tgt.grid(0.2)
     dyn = sc.run_period(site, water, [sol.panel], X, Y, days)
     chk = sc.clearance_check(dyn, X, Y, tgt, 0.75, site)
+    con_d = sc.noon_contrast(dyn, site); con_c = sc.noon_contrast(cs["result"], site)
     rob = sc.robustness(site, water, [sol.panel], X, Y, days[:2], every=1)
     corals = {}
     for pid, acc in [("acropora_cervicornis", "none"), ("acropora_cervicornis", "site"), ("pocillopora_damicornis", "shade"),
@@ -125,7 +127,10 @@ def golden_scenarios() -> dict:
                 cloth=cs["panel"].__dict__, T_constant=Tc, dli_constant_day0=cs["result"].dli()[0].tolist(),
                 solve=dict(lx=sol.panel.lx, ly=sol.panel.ly, T=sol.transmission, iterations=sol.iterations, history=sol.history),
                 T_dynamic_full=dyn.transmission(), direct_hours_day0=dyn.direct_sun_hours()[0].tolist(),
-                clearance=dict(share=chk["share_never_sunlit"], h_rule=chk["h_for_sun_by_0800_shade_from_1000"], h_min=chk["h_min_any"]),
+                clearance=dict(share=chk["share_never_sunlit"], h_rule=chk["h_for_sun_by_0800_shade_from_1000"], h_min=chk["h_min_any"],
+                               h_rule_day=list(chk["h_rule_day"])),
+                beam_share=dyn.beam_share(), contrast_dynamic=con_d, contrast_constant=con_c,
+                contrast_warning=sc.contrast_warning(con_d, dyn.beam_share(), water.depth),
                 robustness=rob, corals=corals, summary_day0=summ)
 
 

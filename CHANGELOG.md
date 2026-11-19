@@ -1,5 +1,35 @@
 # Changelog
 
+## 5.1.0 (not yet released)
+
+From a scientific review of v5.0.0 (19 Nov 2026). Designs are unchanged except where noted.
+
+- **Every day, everywhere.** The canopy solver and the robustness table use every day of the deployment (v5.0
+  used about 20 and 12 days). The canopy is solved on the reported grid, so the separate correction step is gone.
+  At Sipaway the canopy width changes by 1.6 mm and the robustness values by at most 0.08 percentage points. Cost:
+  the full Python design takes about 3 minutes instead of 1; in the app the full result takes about 5 s and the
+  robustness table about 4 s more. The app's quick preview still uses every tenth day and says so.
+- **Clearance rule on the most demanding day.** The canopy height that lets the morning sun reach the whole coral
+  area is now computed for every day and the largest is shown, with its date (Sipaway: 2.74 m around the June
+  solstice; v5.0 showed 2.56 m for the first day).
+- **Light at noon and in the morning and afternoon** for each design, and the share of the light at depth that
+  arrives as the sun beam. A CHECK appears when dynamic shading's noon light is more than 0.8 of its morning and
+  afternoon light. At Sipaway (Kd 0.21, 10 m, ω₀ 0.9) the beam carries 0.7 % of the light and the canopy designed
+  to match an 80 % cloth gives 32 % of open-water light at noon and 36 % in the morning and afternoon, against the
+  cloth's 33 % and 35 %: dynamic shading barely differs from constant shading there.
+- **"Direct sun" renamed "sun in line".** These hours are geometry only (clouds and scattering are not counted).
+  CSV columns `*_direct_sun_h` are now `*_sun_in_line_h`.
+- **Assumptions stated on daily values.** Exports (app and Python) start with a line giving the version, site,
+  dates, light data and the assumptions: one Kd on every day, a fixed depth (no tide), and, for the typical year,
+  that each date is one typical-year day, not that year's weather. `days.csv` has a `weather` column. The app's
+  day view says the same.
+- Python: `DesignResult.beam_share`, `ScenarioResult.contrast`, `scenarios.noon_contrast`, `contrast_warning`,
+  `PeriodResult.beam_share()`; `clearance_check` returns `h_rule_day`; `solve_dynamic` and `robustness` default
+  to every day. TypeScript: the same (`beamShare`, `noonContrast`, `contrastWarning`, `hRuleDay`). Golden values
+  extended; both test suites check them to 10⁻⁹.
+- `python/examples/methods_paper_analyses.py` is unchanged and still solves on every tenth day; it reproduces the
+  methods-paper groundwork figures as made.
+
 ## 5.0.0 (2026-11-13)
 
 Rebuilt on radiative transfer. Compared with v4.2:

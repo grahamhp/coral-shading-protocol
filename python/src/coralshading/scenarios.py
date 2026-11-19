@@ -10,10 +10,14 @@ The objective is the period transmission T = sum over days of the area-mean dail
 the sum of the open-water daily light at the same depth; the target reduction is 1 - T.
 
 Solver (dynamic): the canopy's north-south size is set to cover the target plus the noon sun's north-south reach
-over the period; the east-west width W is found by bisection (T decreases monotonically with W). Infeasible
-targets are reported with the reason and the closest design (design document D2). Clearance (D4): points that
-never get direct sun are flagged and the height rule H >= 2R / (tan theta_lit - tan theta_shade) is shown.
-Robustness (D3): Kd, w0, wind and placement are varied and the spread reported.
+over the period; the east-west width W is found by regula falsi (T decreases monotonically with W), on every day
+of the period. Infeasible targets are reported with the reason and the closest design (design document D2).
+Clearance (D4): points that never have the sun in line are flagged, and the height rule
+H >= 2R / (tan theta_lit - tan theta_shade) is shown for the most demanding day of the period.
+Robustness (D3): Kd, w0, wind and placement are varied on every day and the spread reported.
+Contrast (v5.1): light at noon (solar noon +/- 1 h) and in the morning and afternoon (3 h or more from noon, sun
+above 10 deg) as shares of open water, and the share of the light at depth that arrives as the sun beam. Where
+scattering dominates, an opaque canopy cannot shade much more at noon than at other times.
 """
 from __future__ import annotations
 
@@ -54,6 +58,7 @@ class PeriodResult:
     azimuth: list
     weights: np.ndarray      # point area weights
     light_dropped: float = 0.0   # share of the hourly light dropped by the timing guard (surface.day_light)
+    beam_open: list = field(default_factory=list)   # per day: [time] sun-beam part of the open-water light
 
     def dli(self):           # [day, point]
         return np.array([e.sum(axis=0) * self.step * 60 / 1e6 for e in self.ed])
@@ -67,14 +72,21 @@ class PeriodResult:
         return float((self.dli() @ w).sum() / self.dli_open().sum())
 
     def direct_sun_hours(self, threshold: float = 0.5):   # [day, point]
+        """Hours per day with the sun in line (geometric: the refracted sun's line passes the structures for at least
+        `threshold` of the wave facets). Not a light dose: clouds and scattering are not counted; see beam_share()."""
         return np.array([(s >= threshold).sum(axis=0) * self.step / 60 for s in self.sunlit])
+
+    def beam_share(self) -> float:
+        """Share of the open-water light at depth, summed over the period, that arrives as the sun beam."""
+        den = float(sum(e.sum() for e in self.ed_open))
+        return float(sum(b.sum() for b in self.beam_open)) / den if den > 0 and self.beam_open else 0.0
 
 
 def run_period(site: Site, water: engine.Water, panels, X, Y, days, n_facets: int = 16, wind_override: float | None = None,
                state: engine.OpticalState | None = None) -> PeriodResult:
     st = state or engine.optical_state(water)
     mom = engine.panel_moments(X, Y, panels, water, st.theta_edges)
-    out = dict(ed=[], ed_open=[], sunlit=[], minutes=[], zenith=[], azimuth=[])
+    out = dict(ed=[], ed_open=[], sunlit=[], minutes=[], zenith=[], azimuth=[], beam_open=[])
     tot = drop = 0.0
     for (y, m, d) in days:
         dl = surface.day_light(site.light, y, m, d, site.lat, site.lon, site.tz, step=site.step, noon_shift=site.noon_shift)
@@ -82,7 +94,7 @@ def run_period(site: Site, water: engine.Water, panels, X, Y, days, n_facets: in
         if wind_override is not None:
             dl = replace(dl, wind=np.full_like(dl.wind, float(wind_override)))
         r = engine.run_day(dl, water, panels, X, Y, n_facets=n_facets, state=st, moments=mom)
-        out["ed"].append(r.ed); out["ed_open"].append(r.ed_open); out["sunlit"].append(r.sunlit)
+        out["ed"].append(r.ed); out["ed_open"].append(r.ed_open); out["sunlit"].append(r.sunlit); out["beam_open"].append(r.beam_open)
         out["minutes"].append(dl.minutes); out["zenith"].append(dl.zenith); out["azimuth"].append(dl.azimuth)
     return PeriodResult(days=list(days), step=site.step, weights=np.ones(len(X)), light_dropped=drop / tot if tot > 0 else 0.0, **out)
 
@@ -127,7 +139,7 @@ def constant_scenario(site, water, target: Target, height: float, days, tau_clea
     mixed = PeriodResult(days=clean.days, step=clean.step, weights=clean.weights, light_dropped=clean.light_dropped,
                          ed=[(1 - s) * a + s * b for a, b in zip(clean.ed, foul.ed)], ed_open=clean.ed_open,
                          sunlit=[(1 - s) * a + s * b for a, b in zip(clean.sunlit, foul.sunlit)],
-                         minutes=clean.minutes, zenith=clean.zenith, azimuth=clean.azimuth)
+                         minutes=clean.minutes, zenith=clean.zenith, azimuth=clean.azimuth, beam_open=clean.beam_open)
     return dict(panel=replace(base, tau=tau_clean), result=mixed, X=X, Y=Y, clean=clean, fouled=foul, fouled_share=s)
 
 
@@ -157,10 +169,11 @@ class SolveResult:
 
 
 def solve_dynamic(site, water, target: Target, height: float, days, target_transmission: float, ly: float | None = None,
-                  w_max: float = 12.0, spacing: float = 0.1, n_facets: int = 16, solve_every: int = 5, tol: float = 0.002,
+                  w_max: float = 12.0, spacing: float = 0.1, n_facets: int = 16, solve_every: int = 1, tol: float = 0.002,
                   tol_T: float = 0.0005,
                   offset: tuple = (0.0, 0.0), wind_override: float | None = None, guess: float | None = None) -> SolveResult:
-    """East-west width of an opaque canopy so that the period transmission matches the target."""
+    """East-west width of an opaque canopy so that the period transmission matches the target. Uses every day of
+    the period unless solve_every > 1."""
     solve_days = days[::solve_every] if solve_every > 1 else days
     X, Y = target.grid(spacing)
     LY = ly if ly is not None else canopy_ns_size(target, height, site, days)
@@ -215,25 +228,59 @@ def solve_dynamic(site, water, target: Target, height: float, days, target_trans
 # ------------------------------------------------------------------ checks
 
 def clearance_check(result: PeriodResult, X, Y, target: Target, height: float, site: Site, threshold_hours: float = 0.1):
-    """Points that never receive direct sun on any day of the period, and the height rule for full clearance
-    (flat sea; design document D4)."""
+    """Points that never have the sun in line on any day of the period, and the height rule for full clearance
+    (flat sea; design document D4): fully sunlit 4 h before solar noon and fully shaded from 2 h before, on the most
+    demanding day of the period (the largest height)."""
     hrs = result.direct_sun_hours()                        # [day, point]
     never = (hrs.max(axis=0) < threshold_hours)
     R = 0.5 * max(target.lx, target.ly if target.shape == "rect" else target.lx)
-    # tan of refracted zenith at 08:00 and 10:00 local solar time on the first day (example clearance window)
-    y, m, d = result.days[0]
-    noon = solar.solar_noon(y, m, d, site.lon, site.tz)
-    zen = lambda minute: float(solar.solar_position(y, m, d, minute, site.lat, site.lon, site.tz).zenith)
-    tz8 = math.tan(math.radians(optics.refracted_zenith_deg(zen(noon - 240))))     # 4 h before solar noon
-    tz10 = math.tan(math.radians(optics.refracted_zenith_deg(zen(noon - 120))))    # 2 h before solar noon
-    h_rule = 2 * R / max(tz8 - tz10, 1e-6)
+    h_rule, h_day = 0.0, result.days[0]
+    for (y, m, d) in result.days:
+        noon = solar.solar_noon(y, m, d, site.lon, site.tz)
+        zen = lambda minute: float(solar.solar_position(y, m, d, minute, site.lat, site.lon, site.tz).zenith)
+        tz8 = math.tan(math.radians(optics.refracted_zenith_deg(zen(noon - 240))))     # 4 h before solar noon
+        tz10 = math.tan(math.radians(optics.refracted_zenith_deg(zen(noon - 120))))    # 2 h before solar noon
+        h = 2 * R / max(tz8 - tz10, 1e-6)
+        if h > h_rule:
+            h_rule, h_day = h, (y, m, d)
     return dict(never_sunlit=never, share_never_sunlit=float(never.mean()), h_min_any=1.78 * R,
-                h_for_sun_by_0800_shade_from_1000=h_rule, height=height)
+                h_for_sun_by_0800_shade_from_1000=h_rule, h_rule_day=tuple(h_day), height=height)
+
+
+def noon_contrast(result: PeriodResult, site: Site) -> dict:
+    """Area-mean light as a share of open water at noon (solar noon +/- 1 h) and in the morning and afternoon (3 h or
+    more from solar noon, sun more than 10 deg up), summed over every day; ratio = noon / morning and afternoon."""
+    w = result.weights / result.weights.sum()
+    nn = no = sn = so = 0.0
+    for (y, m, d), e, eo, mins, zen in zip(result.days, result.ed, result.ed_open, result.minutes, result.zenith):
+        noon = solar.solar_noon(y, m, d, site.lon, site.tz) + site.noon_shift
+        dt = np.abs(np.asarray(mins, float) - noon)
+        a = np.asarray(e, float) @ w
+        at_noon = dt <= 60.0
+        side = (dt >= 180.0) & (np.asarray(zen, float) < 80.0)
+        nn += float(a[at_noon].sum()); no += float(np.asarray(eo, float)[at_noon].sum())
+        sn += float(a[side].sum()); so += float(np.asarray(eo, float)[side].sum())
+    noon_t = nn / no if no > 0 else float("nan"); side_t = sn / so if so > 0 else float("nan")
+    return dict(noon=noon_t, side=side_t, ratio=noon_t / side_t if side_t > 0 else float("nan"))
+
+
+CONTRAST_WARN = 0.8     # dynamic shading: warn when noon light is more than this share of morning and afternoon light
+
+
+def contrast_warning(c: dict, beam_share: float, depth: float) -> str | None:
+    """Plain-language warning when dynamic shading gives nearly the same light pattern as constant shading."""
+    if not (c["ratio"] > CONTRAST_WARN):
+        return None
+    return (f"Dynamic shading barely changes through the day here: at noon the corals get {100 * c['noon']:.0f} % of open-water "
+            f"light, in the morning and afternoon {100 * c['side']:.0f} %. Only {100 * beam_share:.1f} % of the light at "
+            f"{depth:g} m arrives as the sun beam; the rest is scattered light from all directions, which the canopy blocks at "
+            f"every hour. A stronger midday contrast needs less scattering water (lower w0), a shallower site or a wider "
+            f"canopy, which also gives less light overall.")
 
 
 def robustness(site, water, panels, X, Y, days, n_facets: int = 16, kd_factor=(0.5, 1.5), w0s=(0.5, 0.9), winds=(0.0, 10.0),
-               shift: float = 0.2, every: int = 5) -> list[dict]:
-    """Period transmission under altered conditions (design document D3)."""
+               shift: float = 0.2, every: int = 1) -> list[dict]:
+    """Period transmission under altered conditions (design document D3), on every day unless every > 1."""
     dd = days[::every] if every > 1 else days
     base = run_period(site, water, panels, X, Y, dd, n_facets).transmission()
     rows = [dict(case="as designed", T=base)]

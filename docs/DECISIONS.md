@@ -221,3 +221,18 @@ alternative was. Items marked **[needs you]** are waiting on your approval or in
     come out larger and tall canopies reach a given light cut less often than at 0.7. The 0.5–0.9 range and the
     golden test values (which set ω₀ explicitly) are unchanged.
 
+## 19 November 2026: scientific review and v5.1.0
+
+51. **Shortcuts measured, then removed.** Every shortcut in v5.0.0 was rerun on all days at Sipaway (103 days): the
+    canopy solve on about 20 days (0.16 cm, 0.05 percentage points), robustness on about 12 days (at most 0.08
+    points), the clearance rule on the first day (2.56 m against 2.74 m on 21 June). All now use every day; the
+    canopy is solved on the reported grid. The app preview keeps every tenth day.
+52. **Dynamic shading can barely differ from constant shading.** At ω₀ 0.9, Kd 0.21 and 10 m, 0.7 % of the light
+    at depth arrives as the sun beam (30 % on a clear day at ω₀ 0.5). Matching the cloth's period light then gives
+    a narrow canopy whose noon light (32 %) is close to its morning and afternoon light (36 %). The 3-D Monte Carlo
+    agrees with the engine at ω₀ 0.85, so this is the physics at that scattering, not the engine. New CHECK when
+    noon light exceeds 0.8 of morning and afternoon light; beam share and noon contrast reported.
+53. **Held-fixed inputs stated.** One Kd and a fixed depth on every day, and typical-year days: light ratios are
+    insensitive (Kd × 0.5–1.5 at most 2.7 points; ±0.75 m depth under 0.3; real years 2014–2023 under 0.11),
+    absolute daily light is not (satellite Kd near Sipaway, 10th to 90th percentile 0.089–0.141, spans about
+    1.7-fold in light at 10 m). Every export now says so. Daily Kd and tide inputs are left for a decision.

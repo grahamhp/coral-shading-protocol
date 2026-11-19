@@ -50,6 +50,11 @@ const ui: UI = { mode: "simple", targetKey: "reef_star", kdKey: "moderate", ligh
 let light: HourlyLight = lightFromJson(ex.light);
 let dataLight = light, dataLabel = ui.lightLabel;   // the loaded data (example or file); `light` may be a clear-sky stand-in
 const isClear = () => light.database.startsWith("clear sky");
+/** What a day in the results represents, and the assumptions behind daily values (as Python's DesignResult). */
+const weatherLabel = () => (isClear() ? "clear-sky estimate" : ui.lightKind === "tmy" ? "typical-year day" : "recorded");
+const assumptions = () => `daily values assume Kd ${state.water.kd} m-1 on every day and a fixed depth of ${state.depth} m (no tide); `
+  + ({ "typical-year day": "with typical-year light each date is one typical-year day, not that year's weather",
+    recorded: "recorded hourly weather", "clear-sky estimate": "clear-sky light (no clouds)" } as Record<string, string>)[weatherLabel()];
 const noonText = () => { const n = solarNoon(state.start[0], state.start[1], state.start[2], state.site.lon, state.site.tz); return hhmm(((n % 1440) + 1440) % 1440); };
 
 /** Use the loaded light data when they are for a point within MATCH_KM of the site; otherwise a clear-sky estimate. */
@@ -349,14 +354,14 @@ function renderResults() {
   const legend = `<div class="legend"><span><span class="dot" style="background:${COLORS.open}"></span>Open water at ${fmt(state.depth, 1)} m</span>${r.scenarios.map((s) => `<span><span class="dot" style="background:${color(s)}"></span>${nameOf(s)}</span>`).join("")}</div>`;
   const picker = `<div class="daypick"><button class="btn ghost sm" data-day="-1" aria-label="Previous day"${di === 0 ? " disabled" : ""}>‹</button><input id="dayIdx" type="range" min="0" max="${nD - 1}" step="1" value="${di}" aria-label="Day of the deployment"><button class="btn ghost sm" data-day="1" aria-label="Next day"${di === nD - 1 ? " disabled" : ""}>›</button><span class="dd">${MON[dd[1] - 1]} ${dd[2]}</span></div>`;
   const dayNote = isClear() ? `Clear-sky estimate (no clouds), so every day looks alike; open water got ${fmt(odli[di]!, 1)} mol m⁻² that day. Area mean.`
-    : `${ui.lightKind === "tmy" ? "Typical-year" : "Recorded"} weather; open water got ${fmt(odli[di]!, 1)} mol m⁻² that day (deployment range ${fmt(lo, 1)}–${fmt(hi, 1)}, lower on cloudy days). Area mean.`;
+    : `${ui.lightKind === "tmy" ? "Typical-year day (one plausible day for this date, not that year's weather)" : "Recorded"} weather; open water got ${fmt(odli[di]!, 1)} mol m⁻² that day (deployment range ${fmt(lo, 1)}–${fmt(hi, 1)}, lower on cloudy days). Area mean. Assumes Kd ${state.water.kd} m⁻¹ on every day and a fixed depth (no tide).`;
   // ---- maps
   const allDli = r.scenarios.flatMap((s) => s.pointDli);
   const vmin = Math.floor(Math.min(...allDli) * 2) / 2, vmax = Math.ceil(Math.max(...allDli) * 2) / 2;
   const extent = Math.max(state.target.lx, state.target.ly, ...r.scenarios.map((s) => Math.max(s.panel.lx, s.panel.ly) + 2 * Math.hypot(s.panel.cx, s.panel.cy))) * 1.08;
   const maps = r.scenarios.map((s) => mapChart(r.points, s.pointDli, r.spacing, vmin, vmax, { lx: s.panel.lx, ly: s.panel.ly, cx: s.panel.cx, cy: s.panel.cy, rot: s.panel.rotDeg },
     state.target, nameOf(s), extent, s.kind === "dynamic" ? s.clearance?.never : undefined)).join("");
-  const never = D?.clearance?.share ? ` <span class="sw" style="background:${COLORS.coral}"></span>Orange dots: parts that never get direct sun.` : "";
+  const never = D?.clearance?.share ? ` <span class="sw" style="background:${COLORS.coral}"></span>Orange dots: parts that never have the sun in line.` : "";
   // ---- across the deployment: daily light
   const dayLight = (s: ScenarioOut) => r.open.dayDli.map((o, i) => o * (1 - s.dayReduction[i]!.mean / 100));
   const season = dailyLightChart(r.days, [{ y: r.open.dayDli, color: COLORS.open, name: "Open water", dash: "5 4" },
@@ -386,11 +391,13 @@ function renderResults() {
     const k = w.indexOf(". ") + 1, head = k > 0 ? w.slice(0, k) : w, rest = k > 0 ? w.slice(k + 1) : "";
     checks.push(`<div class="check"><span class="badge warn">CHECK</span><div><b>${esc(head)}</b>${rest ? `<br><span class="sub">${esc(rest)}</span>` : ""}</div></div>`);
   }
+  const beamNote = `At ${state.depth} m the sun beam carries ${fmt(100 * (r.beamShare ?? 0), 1)} % of the light; the rest is scattered light from all directions.`
+    + (D?.contrast ? ` Under dynamic shading the corals get ${pct(100 * D.contrast.noon)} of open-water light at noon and ${pct(100 * D.contrast.side)} in the morning and afternoon.` : "");
   if (D?.clearance) {
     const sunMin = Math.min(...D.pointSunHours), sunMax = Math.max(...D.pointSunHours);
     checks.push(D.clearance.share > 0
-      ? `<div class="check"><span class="badge warn">CHECK</span><div><b>${pct(100 * D.clearance.share)} of the coral area never gets direct sun under dynamic shading</b><br><span class="sub">Orange dots on the map. A canopy about ${fmt(D.clearance.hRule, 1)} m above the corals would let the morning sun reach all of it (at least ${fmt(D.clearance.hMin, 1)} m is needed for any full clearance).</span></div></div>`
-      : `<div class="check"><span class="badge ok">OK</span><div><b>Every part of the coral area gets some direct sun each day</b><br><span class="sub">Under dynamic shading, the sun's beam reaches each part for ${fmt(sunMin, 1)}–${fmt(sunMax, 1)} hours a day, in the morning and afternoon: least where the canopy covers longest (usually the middle), most at the edges. These hours count when the sun is in line; clouds can still dim it.</span></div></div>`);
+      ? `<div class="check"><span class="badge warn">CHECK</span><div><b>${pct(100 * D.clearance.share)} of the coral area never has the sun in line under dynamic shading</b><br><span class="sub">Orange dots on the map. A canopy about ${fmt(D.clearance.hRule, 1)} m above the corals would let the morning sun reach all of it on every day (most demanding day ${dstr(D.clearance.hRuleDay)}; at least ${fmt(D.clearance.hMin, 1)} m is needed for any full clearance). ${beamNote}</span></div></div>`
+      : `<div class="check"><span class="badge ok">OK</span><div><b>Every part of the coral area has the sun in line each day</b><br><span class="sub">Under dynamic shading, the sun is in line with each part for ${fmt(sunMin, 1)}–${fmt(sunMax, 1)} hours a day, in the morning and afternoon: least where the canopy covers longest (usually the middle), most at the edges. These hours are geometry only: clouds and scattering are not counted. ${beamNote}</span></div></div>`);
   }
   if (D && D.panel.lx + 0.02 < state.target.lx)
     checks.push(`<div class="check"><span class="badge warn">CHECK</span><div><b>The ends of the coral area get little shade from dynamic shading</b><br><span class="sub">The canopy (${fmt(D.panel.lx, 2)} m east–west) is narrower than the coral area (${fmt(state.target.lx, 1)} m east–west), so the east and west ends stay in the sun. Lay the coral area long north–south: the sun crosses from east to west, so the shade then spreads evenly.</span></div></div>`);
@@ -491,18 +498,19 @@ function download(name: string, text: string, type = "text/csv") {
 
 function doExport(kind: string) {
   if (!last) return;
-  const r = last, head = `# Coral Shading Protocol ${VERSION}; ${state.site.name} ${state.site.lat}, ${state.site.lon}; ${dstr(state.start)} to ${dstr(state.end)}; ${r.level === "preview" ? "preview" : "full"} resolution\n`;
+  const r = last, head = `# Coral Shading Protocol ${VERSION}; ${state.site.name} ${state.site.lat}, ${state.site.lon}; ${dstr(state.start)} to ${dstr(state.end)}; ${r.level === "preview" ? "preview" : "full"} resolution; ${assumptions()}\n`;
   if (kind === "inputs") download("csp_inputs.json", JSON.stringify({ app: "Coral Shading Protocol", version: VERSION, inputs: state, light: ui.lightLabel }, null, 1), "application/json");
   if (kind === "points") {
-    const cols = r.scenarios.flatMap((s) => [`${s.kind}_daily_light_mol_m2_d`, `${s.kind}_direct_sun_h`]);
+    const cols = r.scenarios.flatMap((s) => [`${s.kind}_daily_light_mol_m2_d`, `${s.kind}_sun_in_line_h`]);
     const lines = [`x_east_m,y_north_m,${cols.join(",")}`];
     for (let p = 0; p < r.points.length / 2; p++) lines.push([r.points[2 * p]!.toFixed(3), r.points[2 * p + 1]!.toFixed(3), ...r.scenarios.flatMap((s) => [s.pointDli[p]!.toFixed(4), s.pointSunHours[p]!.toFixed(2)])].join(","));
     download("csp_points.csv", head + lines.join("\n"));
   }
   if (kind === "days") {
     const cols = r.scenarios.flatMap((s) => [`${s.kind}_reduction_mean_pct`, `${s.kind}_reduction_min_pct`, `${s.kind}_reduction_max_pct`]);
-    const lines = [`date,open_water_daily_light_mol_m2_d,${cols.join(",")}`];
-    r.days.forEach((d, i) => lines.push([dstr(d), r.open.dayDli[i]!.toFixed(3), ...r.scenarios.flatMap((s) => [s.dayReduction[i]!.mean, s.dayReduction[i]!.min, s.dayReduction[i]!.max].map((v) => v.toFixed(2)))].join(",")));
+    const lines = [`date,weather,open_water_daily_light_mol_m2_d,${cols.join(",")}`];
+    const wx = weatherLabel();
+    r.days.forEach((d, i) => lines.push([dstr(d), wx, r.open.dayDli[i]!.toFixed(3), ...r.scenarios.flatMap((s) => [s.dayReduction[i]!.mean, s.dayReduction[i]!.min, s.dayReduction[i]!.max].map((v) => v.toFixed(2)))].join(",")));
     download("csp_days.csv", head + lines.join("\n"));
   }
   if (kind === "report") {

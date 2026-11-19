@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import type { Tables } from "../src/core/engine.ts";
 import { lightFromJson } from "../src/core/surface.ts";
 import { type Day, type Site, deploymentDays, constantScenario, solveDynamic, runPeriod, transmission, directSunHours,
-  dliPerDay, clearanceCheck, robustness, biology } from "../src/core/scenarios.ts";
+  dliPerDay, clearanceCheck, robustness, biology, beamShare, noonContrast, contrastWarning } from "../src/core/scenarios.ts";
 import { type PresetFile, coralFromPreset, summarize } from "../src/core/pe.ts";
 import { targetGrid } from "../src/core/geometry.ts";
 
@@ -35,6 +35,13 @@ test("scenario layer reproduces the Python reference (Sipaway)", () => {
   directSunHours(dyn)[0]!.forEach((v, i) => assert.ok(close(v, G.direct_hours_day0[i]), `sun hours ${i}`));
   const chk = clearanceCheck(dyn, tgt, 0.75, site);
   assert.ok(close(chk.shareNeverSunlit, G.clearance.share) && close(chk.hForSunBy0800ShadeFrom1000, G.clearance.h_rule) && close(chk.hMinAny, G.clearance.h_min));
+  assert.deepEqual(chk.hRuleDay, G.clearance.h_rule_day);
+  assert.ok(close(beamShare(dyn), G.beam_share), `beam share ${beamShare(dyn)} vs ${G.beam_share}`);
+  for (const [k, res] of [["contrast_dynamic", noonContrast(dyn, site)], ["contrast_constant", noonContrast(cs.result, site)]] as const)
+    for (const f of ["noon", "side", "ratio"] as const) assert.ok(close(res[f], G[k][f]), `${k} ${f}: ${res[f]} vs ${G[k][f]}`);
+  assert.equal(contrastWarning(noonContrast(dyn, site), beamShare(dyn), water.depth), G.contrast_warning);
+  const W = G.contrast_warning_example;
+  assert.equal(contrastWarning(W.contrast, W.beam, W.depth), W.text);
   const rob = robustness(site, water, [sol.panel], pts, days.slice(0, 2), T, 16, [0.5, 1.5], [0.5, 0.9], [0, 10], 0.2, 1);
   rob.forEach((r, i) => assert.ok(close(r.T, G.robustness[i].T), `robustness ${r.case}`));
   for (const c of Object.values(G.corals) as any[]) {

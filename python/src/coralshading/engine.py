@@ -149,6 +149,7 @@ class DayResult:
     ed_open: np.ndarray       # [time] open water at the same depth
     sunlit: np.ndarray        # [time, point] share of the sun beam reaching the point (0..1)
     beam_part: np.ndarray     # [time, point] beam contribution
+    beam_open: np.ndarray = None  # [time] sun-beam part of the open-water light (within 3 deg of the refracted sun)
     meta: dict = field(default_factory=dict)
 
     def dli(self):            # mol m-2 d-1 per point
@@ -178,6 +179,7 @@ def run_day(day, water: Water, panels, points_x, points_y, n_facets: int = 64, s
     nt = len(day.minutes); npnt = len(px)
     up = day.zenith < 90.0
     ed = np.zeros((nt, npnt)); ed_open = np.zeros(nt); sunlit = np.zeros((nt, npnt)); beam_part = np.zeros((nt, npnt))
+    beam_open = np.zeros(nt)
     T_sky = optics.sky_transmittance()
     beam_z, A_z = _interp_sunz(st, day.zenith)
     sky_masked = (st.sky_A0[None, :] * C[0]).sum(axis=1)                      # [point]
@@ -203,6 +205,6 @@ def run_day(day, water: Water, panels, points_x, points_y, n_facets: int = 64, s
         sun_open = beam_z[k] + 2 * math.pi * Ak[0].sum()
         ed[k] = Fs * (beam_z[k] * vis + broad) + Fk * sky_masked
         ed_open[k] = Fs * sun_open + Fk * 2 * math.pi * st.sky_A0.sum()
-        sunlit[k] = vis; beam_part[k] = Fs * beam_z[k] * vis
-    return DayResult(minutes=day.minutes, step=day.step, ed=ed, ed_open=ed_open, sunlit=sunlit, beam_part=beam_part,
+        sunlit[k] = vis; beam_part[k] = Fs * beam_z[k] * vis; beam_open[k] = Fs * beam_z[k]
+    return DayResult(minutes=day.minutes, step=day.step, ed=ed, ed_open=ed_open, sunlit=sunlit, beam_part=beam_part, beam_open=beam_open,
                      meta=dict(tau=st.tau, kd=water.kd, w0=water.w0, depth=water.depth))

@@ -19,6 +19,7 @@ export interface PeriodResult {
   days: Day[]; step: number; ed: Float64Array[][]; edOpen: Float64Array[]; sunlit: Float64Array[][];
   minutes: Float64Array[]; zenith: Float64Array[]; azimuth: Float64Array[]; nPoints: number;
   lightDropped?: number; // share of the hourly light dropped by the timing guard (dayLight)
+  beamOpen: Float64Array[];   // per day: sun-beam part of the open-water light
 }
 
 export function dliPerDay(r: PeriodResult): Float64Array[] {            // [day] -> per point, mol m-2 d-1
@@ -41,6 +42,15 @@ export function transmission(r: PeriodResult): number {
   return num / den;
 }
 
+/** Share of the open-water light at depth, summed over the period, that arrives as the sun beam. */
+export function beamShare(r: PeriodResult): number {
+  let b = 0, o = 0;
+  for (const d of r.beamOpen) for (const v of d) b += v;
+  for (const d of r.edOpen) for (const v of d) o += v;
+  return o > 0 ? b / o : 0;
+}
+
+/** Hours per day with the sun in line (geometric; not a light dose: clouds and scattering are not counted). */
 export function directSunHours(r: PeriodResult, threshold = 0.5): Float64Array[] {
   return r.sunlit.map((day) => {
     const o = new Float64Array(r.nPoints);
@@ -65,14 +75,14 @@ export function runPeriod(site: Site, water: Water, panels: readonly Panel[], pt
   const st = state ?? opticalState(water, tables);
   const mom = panelMoments(pts, panels, water, st.thetaEdges, tables.m_max);
   const step = site.step ?? 10, shift = site.noonShift ?? 0;
-  const out: PeriodResult = { days, step, ed: [], edOpen: [], sunlit: [], minutes: [], zenith: [], azimuth: [], nPoints: pts.length / 2 };
+  const out: PeriodResult = { days, step, ed: [], edOpen: [], sunlit: [], minutes: [], zenith: [], azimuth: [], nPoints: pts.length / 2, beamOpen: [] };
   let tot = 0, drop = 0;
   for (const [y, m, d] of days) {
     let dl = cachedDayLight(site, y, m, d, step, shift);
     tot += dl.lightTotal ?? 0; drop += dl.lightDropped ?? 0;
     if (windOverride !== undefined) dl = { ...dl, wind: new Float64Array(dl.wind.length).fill(windOverride) };
     const r = runDay(dl, water, panels, pts, st, mom, nFacets);
-    out.ed.push(r.ed); out.edOpen.push(r.edOpen); out.sunlit.push(r.sunlit);
+    out.ed.push(r.ed); out.edOpen.push(r.edOpen); out.sunlit.push(r.sunlit); out.beamOpen.push(r.beamOpen);
     out.minutes.push(dl.minutes); out.zenith.push(dl.zenith); out.azimuth.push(dl.azimuth);
   }
   out.lightDropped = tot > 0 ? drop / tot : 0;
@@ -129,7 +139,7 @@ export interface SolveResult { feasible: boolean; panel: Panel; transmission: nu
 
 export function solveDynamic(site: Site, water: Water, target: Target, height: number, days: Day[], tables: Tables, targetTransmission: number,
   opts: { ly?: number; wMax?: number; spacing?: number; nFacets?: number; solveEvery?: number; tol?: number; tolT?: number; offset?: [number, number]; wind?: number; guess?: number } = {}): SolveResult {
-  const { wMax = 12, spacing = 0.1, nFacets = 16, solveEvery = 5, tol = 0.002, tolT = 0.0005, offset = [0, 0] } = opts;
+  const { wMax = 12, spacing = 0.1, nFacets = 16, solveEvery = 1, tol = 0.002, tolT = 0.0005, offset = [0, 0] } = opts;
   const sdays = solveEvery > 1 ? days.filter((_, i) => i % solveEvery === 0) : days;
   const pts = targetGrid(target, spacing);
   const LY = opts.ly ?? canopyNsSize(target, height, site, days);
@@ -166,7 +176,7 @@ export function solveDynamic(site: Site, water: Water, target: Target, height: n
   return { feasible: true, panel: mk(W), transmission: tW, targetTransmission, iterations: it, history: hist, message: "Solved." };
 }
 
-export interface Clearance { neverSunlit: Uint8Array; shareNeverSunlit: number; hMinAny: number; hForSunBy0800ShadeFrom1000: number; height: number }
+export interface Clearance { neverSunlit: Uint8Array; shareNeverSunlit: number; hMinAny: number; hForSunBy0800ShadeFrom1000: number; hRuleDay: Day; height: number }
 
 export function clearanceCheck(r: PeriodResult, target: Target, height: number, site: Site, thresholdHours = 0.1): Clearance {
   const hrs = directSunHours(r);
@@ -177,17 +187,55 @@ export function clearanceCheck(r: PeriodResult, target: Target, height: number, 
     if (mx < thresholdHours) { never[p] = 1; n++; }
   }
   const R = 0.5 * Math.max(target.lx, target.shape === "rect" ? target.ly : target.lx);
-  const [y, m, d] = r.days[0]!;
-  const noon = solarNoon(y, m, d, site.lon, site.tz);
-  const tz = (minute: number) => Math.tan((refractedZenithDeg(solarPosition(y, m, d, minute, site.lat, site.lon, site.tz).zenith) * Math.PI) / 180);
-  const hRule = (2 * R) / Math.max(tz(noon - 240) - tz(noon - 120), 1e-6);
-  return { neverSunlit: never, shareNeverSunlit: n / r.nPoints, hMinAny: 1.78 * R, hForSunBy0800ShadeFrom1000: hRule, height };
+  // height rule on the most demanding day of the period (the largest height)
+  let hRule = 0, hRuleDay: Day = r.days[0]!;
+  for (const [y, m, d] of r.days) {
+    const noon = solarNoon(y, m, d, site.lon, site.tz);
+    const tz = (minute: number) => Math.tan((refractedZenithDeg(solarPosition(y, m, d, minute, site.lat, site.lon, site.tz).zenith) * Math.PI) / 180);
+    const h = (2 * R) / Math.max(tz(noon - 240) - tz(noon - 120), 1e-6);
+    if (h > hRule) { hRule = h; hRuleDay = [y, m, d]; }
+  }
+  return { neverSunlit: never, shareNeverSunlit: n / r.nPoints, hMinAny: 1.78 * R, hForSunBy0800ShadeFrom1000: hRule, hRuleDay, height };
+}
+
+export interface Contrast { noon: number; side: number; ratio: number }
+
+/** Area-mean light as a share of open water at noon (solar noon ± 1 h) and in the morning and afternoon (3 h or more
+ *  from solar noon, sun more than 10° up), summed over every day; ratio = noon / morning and afternoon. */
+export function noonContrast(r: PeriodResult, site: Site): Contrast {
+  let nn = 0, no = 0, sn = 0, so = 0;
+  const nP = r.nPoints;
+  r.days.forEach(([y, m, d], i) => {
+    const noon = solarNoon(y, m, d, site.lon, site.tz) + (site.noonShift ?? 0);
+    const e = r.ed[i]!, eo = r.edOpen[i]!, mins = r.minutes[i]!, zen = r.zenith[i]!;
+    for (let k = 0; k < mins.length; k++) {
+      const dt = Math.abs(mins[k]! - noon);
+      const atNoon = dt <= 60, side = dt >= 180 && zen[k]! < 80;
+      if (!atNoon && !side) continue;
+      let a = 0; const row = e[k]!; for (let p = 0; p < nP; p++) a += row[p]! / nP;
+      if (atNoon) { nn += a; no += eo[k]!; } else { sn += a; so += eo[k]!; }
+    }
+  });
+  const noonT = no > 0 ? nn / no : NaN, sideT = so > 0 ? sn / so : NaN;
+  return { noon: noonT, side: sideT, ratio: sideT > 0 ? noonT / sideT : NaN };
+}
+
+export const CONTRAST_WARN = 0.8;   // dynamic shading: warn when noon light is more than this share of morning and afternoon light
+
+/** Plain-language warning when dynamic shading gives nearly the same light pattern as constant shading (as Python). */
+export function contrastWarning(c: Contrast, beam: number, depth: number): string | null {
+  if (!(c.ratio > CONTRAST_WARN)) return null;
+  return `Dynamic shading barely changes through the day here: at noon the corals get ${(100 * c.noon).toFixed(0)} % of open-water `
+    + `light, in the morning and afternoon ${(100 * c.side).toFixed(0)} %. Only ${(100 * beam).toFixed(1)} % of the light at `
+    + `${depth} m arrives as the sun beam; the rest is scattered light from all directions, which the canopy blocks at `
+    + `every hour. A stronger midday contrast needs less scattering water (lower w0), a shallower site or a wider `
+    + `canopy, which also gives less light overall.`;
 }
 
 export interface RobustRow { case: string; T: number }
 
 export function robustness(site: Site, water: Water, panels: readonly Panel[], pts: Float64Array, days: Day[], tables: Tables, nFacets = 16,
-  kdFactor = [0.5, 1.5], w0s = [0.5, 0.9], winds = [0, 10], shift = 0.2, every = 5): RobustRow[] {
+  kdFactor = [0.5, 1.5], w0s = [0.5, 0.9], winds = [0, 10], shift = 0.2, every = 1): RobustRow[] {
   const dd = every > 1 ? days.filter((_, i) => i % every === 0) : days;
   const T = (w: Water, p: readonly Panel[], wind?: number) => transmission(runPeriod(site, w, p, pts, dd, tables, nFacets, wind));
   const rows: RobustRow[] = [{ case: "as designed", T: T(water, panels) }];

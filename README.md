@@ -20,7 +20,8 @@ with sources). The app shows:
 
 - the size of the shade cloth and the canopy;
 - daily light (mol m⁻² d⁻¹) under each and in open water, as maps and curves through the day;
-- hours of direct sun, light reduction and the coral's expected photosynthesis and P:R;
+- light at noon and in the morning and afternoon, hours with the sun in line, light reduction and the coral's
+  expected photosynthesis and P:R;
 - how much the result changes with water clarity, water scattering, wind and the structure's position.
 
 Simple mode asks for the essentials; expert mode adds water scattering, clean and fouled cloth, independent
@@ -48,7 +49,7 @@ r.to_csv("results/")
 r.mc_check()        # check the design with the 3-D Monte Carlo (a few minutes)
 ```
 
-A full 103-day design at the 5 cm grid takes about 4 minutes in Python (`spacing=0.1` is faster); the app
+A full 103-day design at the 5 cm grid takes about 3 minutes in Python (`spacing=0.1` is faster); the app
 takes a few seconds because it reorganizes the same equations for speed (the test suite checks that both give
 the same numbers). See
 `python/examples/quickstart.ipynb`.
@@ -68,7 +69,9 @@ independent 3-D Monte Carlo: [docs/validation.md](docs/validation.md). Design ch
 - **v3.2** (tag `v3.2`, commit `3b45b53c`): earlier public version.
 - **v4.2** (tag `v4.2`, commit `f3c2957a`): last version before v5. Attenuates direct and diffuse light
   vertically with one Kd. Still available at https://grahamhp.github.io/coral-shading-protocol/v4.2/.
-- **v5.0**: rebuilt on radiative transfer. See [CHANGELOG.md](CHANGELOG.md).
+- **v5.0** (tag `v5.0.0`): rebuilt on radiative transfer. See [CHANGELOG.md](CHANGELOG.md).
+- **v5.1**: every day in every calculation, light at noon versus morning and afternoon, the sun beam's share of
+  the light, and the assumptions stated on every export. See [CHANGELOG.md](CHANGELOG.md).
 
 ## Repository
 

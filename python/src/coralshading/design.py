@@ -9,11 +9,10 @@
 from __future__ import annotations
 
 import csv
-import math
 import os
 import sys
 import time
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -36,6 +35,7 @@ class ScenarioResult:
     clearance: dict | None = None
     robustness: list | None = None
     solve: sc.SolveResult | None = None
+    contrast: dict | None = None    # light at noon and in the morning and afternoon (scenarios.noon_contrast)
 
     @property
     def reduction(self) -> float:
@@ -50,6 +50,20 @@ class DesignResult:
     target: Target
     scenarios: list = field(default_factory=list)
     warnings: list = field(default_factory=list)
+    beam_share: float = 0.0         # share of the open-water light at depth that arrives as the sun beam
+
+    def weather(self) -> str:
+        """What the daily values represent: a typical-year day, recorded weather or the clear-sky estimate."""
+        h = self.site.light
+        if h.database.startswith("clear sky"):
+            return "clear-sky estimate"
+        return "typical-year day" if h.kind == "tmy" else "recorded"
+
+    def assumptions(self) -> str:
+        i = self.inputs
+        w = {"typical-year day": "with typical-year light each date is one typical-year day, not that year's weather",
+             "recorded": "recorded hourly weather", "clear-sky estimate": "clear-sky light (no clouds)"}[self.weather()]
+        return f"daily values assume Kd {i['kd']:g} m-1 on every day and a fixed depth of {i['depth']:g} m (no tide); {w}"
 
     def get(self, kind: str) -> ScenarioResult | None:
         return next((s for s in self.scenarios if s.kind == kind), None)
@@ -61,7 +75,8 @@ class DesignResult:
                  f"structures {i['height']} m above; Kd {i['kd']} m-1, w0 {i['w0']}; light: {i['light']}"]
         lines += [f"WARNING: {w}" for w in self.warnings]
         p0 = self.scenarios[0].period
-        lines.append(f"Open water at depth: {p0.dli_open().mean():.2f} mol m-2 d-1 (mean daily light)")
+        lines.append(f"Open water at depth: {p0.dli_open().mean():.2f} mol m-2 d-1 (mean daily light); {100 * self.beam_share:.1f} % of it "
+                     f"arrives as the sun beam, the rest as scattered light from all directions")
         for s in self.scenarios:
             name = "Constant shading (shade cloth)" if s.kind == "constant" else "Dynamic shading (opaque canopy)"
             dli = s.period.dli().mean()
@@ -69,18 +84,24 @@ class DesignResult:
                          f"daily light {dli:.2f} mol m-2 d-1 ({s.reduction:.1f} % less than open water)")
             b = s.biology["mean"]
             pr = f", daily P:R {b['pr_daily']:.2f}" if "pr_daily" in b else ""
+            if s.contrast is not None:
+                lines.append(f"    light at noon {100 * s.contrast['noon']:.0f} % and in the morning and afternoon "
+                             f"{100 * s.contrast['side']:.0f} % of open water")
             lines.append(f"    coral ({i['coral']}, adjusted to {i['acclimate']}): Ek {b['ek']:.0f}; photosynthesis "
                          f"{100 * b['gross_vs_open']:.0f} % of unshaded; {b['hours_above_ek']:.1f} h above Ek per day{pr}")
             if s.solve is not None and not s.solve.feasible:
                 lines.append("    " + s.solve.message)
             if s.clearance is not None:
                 c = s.clearance
-                lines.append(f"    never in direct sun: {100 * c['share_never_sunlit']:.0f} % of the area; height for sun by "
-                             f"4 h before noon and full shade from 2 h before: {c['h_for_sun_by_0800_shade_from_1000']:.2f} m")
+                hd = c["h_rule_day"]
+                lines.append(f"    never in line with the sun (geometric): {100 * c['share_never_sunlit']:.0f} % of the area; height for "
+                             f"sun by 4 h before noon and full shade from 2 h before: {c['h_for_sun_by_0800_shade_from_1000']:.2f} m "
+                             f"(most demanding day, {hd[0]}-{hd[1]:02d}-{hd[2]:02d})")
             if s.robustness:
                 T = [r["T"] for r in s.robustness]
                 lines.append(f"    robustness: light {100 * min(T):.0f}-{100 * max(T):.0f} % of open water across Kd x0.5-1.5, "
                              f"w0 0.5-0.9, wind 0-10 m s-1 and 0.2 m shifts")
+        lines.append("Note: " + self.assumptions() + ".")
         if self.inputs["height"] > 1.5:
             lines.append("Note: above 1.5 m the fast engine can over-predict light in the shade by up to 4 % of open water; "
                          "use mc_check().")
@@ -89,11 +110,15 @@ class DesignResult:
     def to_csv(self, folder: str | os.PathLike) -> list[str]:
         d = Path(folder); d.mkdir(parents=True, exist_ok=True)
         out = []
+        i = self.inputs
+        head = (f"# Coral Shading Protocol {__version__}; {i['lat']}, {i['lon']}; {'%d-%02d-%02d' % i['start']} to "
+                f"{'%d-%02d-%02d' % i['end']}; light: {i['light']}; {self.assumptions()}\n")
         p = d / "points.csv"
         with open(p, "w", newline="", encoding="utf-8") as f:
+            f.write(head)
             w = csv.writer(f)
             w.writerow(["x_east_m", "y_north_m"] + [f"{s.kind}_daily_light_mol_m2_d" for s in self.scenarios]
-                       + [f"{s.kind}_direct_sun_h" for s in self.scenarios])
+                       + [f"{s.kind}_sun_in_line_h" for s in self.scenarios])
             cols = [s.period.dli().mean(axis=0) for s in self.scenarios] + [s.period.direct_sun_hours().mean(axis=0) for s in self.scenarios]
             X = self.scenarios[0].X; Y = self.scenarios[0].Y
             for k in range(len(X)):
@@ -101,17 +126,20 @@ class DesignResult:
         out.append(str(p))
         p = d / "days.csv"
         with open(p, "w", newline="", encoding="utf-8") as f:
+            f.write(head)
             w = csv.writer(f)
-            w.writerow(["date", "open_water_daily_light_mol_m2_d"] + [f"{s.kind}_daily_light_mean_mol_m2_d" for s in self.scenarios])
+            w.writerow(["date", "weather", "open_water_daily_light_mol_m2_d"] + [f"{s.kind}_daily_light_mean_mol_m2_d" for s in self.scenarios])
             p0 = self.scenarios[0].period
+            wx = self.weather()
+            o = p0.dli_open(); per = [s.period.dli() for s in self.scenarios]
             for k, day in enumerate(p0.days):
-                w.writerow([f"{day[0]}-{day[1]:02d}-{day[2]:02d}", f"{p0.dli_open()[k]:.3f}"]
-                           + [f"{s.period.dli()[k].mean():.3f}" for s in self.scenarios])
+                w.writerow([f"{day[0]}-{day[1]:02d}-{day[2]:02d}", wx, f"{o[k]:.3f}"] + [f"{q[k].mean():.3f}" for q in per])
         out.append(str(p))
         rob = [s for s in self.scenarios if getattr(s, "robustness", None)]
         if rob:
             p = d / "robustness.csv"
             with open(p, "w", newline="", encoding="utf-8") as f:
+                f.write(head)
                 w = csv.writer(f)
                 w.writerow(["scenario", "case", "period_transmission"])
                 for s in rob:
@@ -229,9 +257,10 @@ def design(lat: float, lon: float, tz: float | None = None, start=(2025, 4, 28),
         cloth = Panel(lx=cloth_size[0], ly=cloth_size[1], height=height, tau=tc) if cloth_size else None
         cs = sc.constant_scenario(site, water, tgt, height, days, tc, tau_fouled, fouled_share, cloth, spacing, n_facets, wind)
         Tc = cs["result"].transmission()
-        s = ScenarioResult("constant", cs["panel"], cs["result"], X, Y, Tc, sc.biology(cs["result"], cor))
+        s = ScenarioResult("constant", cs["panel"], cs["result"], X, Y, Tc, sc.biology(cs["result"], cor),
+                           contrast=sc.noon_contrast(cs["result"], site))
         if robustness:
-            s.robustness = sc.robustness(site, water, [cs["panel"]], *tgt.grid(0.1), days, n_facets, every=max(1, math.ceil(len(days) / 12)))
+            s.robustness = sc.robustness(site, water, [cs["panel"]], *tgt.grid(0.1), days, n_facets)
         res.scenarios.append(s)
     if scenario in ("dynamic", "both"):
         sol = None
@@ -240,28 +269,23 @@ def design(lat: float, lon: float, tz: float | None = None, start=(2025, 4, 28),
                         rot_deg=canopy.get("rot", 0.0))
         else:
             target_T = Tc if (sync and Tc is not None) else 1 - dynamic_reduction / 100
-            every = max(1, math.ceil(len(days) / 20))
-            sol = sc.solve_dynamic(site, water, tgt, height, days, target_T, spacing=max(spacing, 0.1), n_facets=n_facets,
-                                   solve_every=every, wind_override=wind)
+            # every day of the period, on the reported grid, so the period light matches the target on the reported grid
+            sol = sc.solve_dynamic(site, water, tgt, height, days, target_T, spacing=spacing, n_facets=n_facets,
+                                   solve_every=1, wind_override=wind)
             pan = sol.panel
-            if sol.feasible and every > 1 and pan.lx > 0.02:
-                # one secant step on all days (as the app does), so the target holds for the whole period
-                Xs, Ys = tgt.grid(max(spacing, 0.1))
-                st = engine.optical_state(water)
-                T_all = lambda W: sc.run_period(site, water, [replace(pan, lx=W)], Xs, Ys, days, n_facets, wind, st).transmission()
-                w1, w2 = pan.lx, pan.lx * 1.03
-                f1, f2 = T_all(w1) - target_T, T_all(w2) - target_T
-                if f2 != f1:
-                    w3 = w1 - f1 * (w2 - w1) / (f2 - f1)
-                    if w3 > 0.01 and abs(w3 - w1) < 0.25 * w1:
-                        pan = replace(pan, lx=w3)
         per = sc.run_period(site, water, [pan], X, Y, days, n_facets, wind_override=wind)
         s = ScenarioResult("dynamic", pan, per, X, Y, per.transmission(), sc.biology(per, cor), solve=sol,
-                           clearance=sc.clearance_check(per, X, Y, tgt, height, site))
+                           clearance=sc.clearance_check(per, X, Y, tgt, height, site), contrast=sc.noon_contrast(per, site))
         if robustness:
-            s.robustness = sc.robustness(site, water, [pan], *tgt.grid(0.1), days, n_facets, every=max(1, math.ceil(len(days) / 12)))
+            s.robustness = sc.robustness(site, water, [pan], *tgt.grid(0.1), days, n_facets)
         res.scenarios.append(s)
+    res.beam_share = res.scenarios[0].period.beam_share() if res.scenarios else 0.0
     res.warnings = light_warnings(h, lat, lon, tz, start, max(s.period.light_dropped for s in res.scenarios) if res.scenarios else 0.0)
+    dyn = res.get("dynamic")
+    if dyn is not None and dyn.contrast is not None:
+        cw = sc.contrast_warning(dyn.contrast, res.beam_share, depth)
+        if cw:
+            res.warnings.append(cw)
     return res
 
 

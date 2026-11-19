@@ -4,8 +4,8 @@ import { opticalState } from "../core/engine.ts";
 import { type Panel, type Target, panel, targetGrid } from "../core/geometry.ts";
 import { type HourlyLight, utcOffsetFromLon } from "../core/surface.ts";
 import { solarNoon } from "../core/solar.ts";
-import { type Day, type Site, type PeriodResult, deploymentDays, constantScenario, solveDynamic, runPeriod, transmission,
-  directSunHours, dliPerDay, dliOpenPerDay, clearanceCheck, robustness, biology } from "../core/scenarios.ts";
+import { type Day, type Site, type PeriodResult, type Contrast, deploymentDays, constantScenario, solveDynamic, runPeriod, transmission,
+  directSunHours, dliPerDay, dliOpenPerDay, clearanceCheck, robustness, biology, beamShare, noonContrast, contrastWarning } from "../core/scenarios.ts";
 import { type PresetFile, type Acclimation, type Coral, coralFromPreset } from "../core/pe.ts";
 
 export type ScenarioChoice = "constant" | "dynamic" | "both";
@@ -42,7 +42,8 @@ export interface ScenarioOut {
   lightHist?: number[];                // hours per day in each light bin (area mean), bins 0..histMax
   bio: Record<string, number>;
   ek: number;
-  clearance?: { share: number; hRule: number; hMin: number; never: number[] };
+  clearance?: { share: number; hRule: number; hRuleDay: Day; hMin: number; never: number[] };
+  contrast?: Contrast;                 // light at noon and in the morning and afternoon, shares of open water
   robustness?: { case: string; T: number }[];
   solve?: { feasible: boolean; message: string; iterations: number };
 }
@@ -62,6 +63,7 @@ export interface Results {
   scenarios: ScenarioOut[];
   warnings: string[];
   timings: Record<string, number>;
+  beamShare: number;                   // share of the open-water light at depth that arrives as the sun beam
 }
 
 export interface Data { tables: Tables; presets: PresetFile; light: HourlyLight }
@@ -120,7 +122,6 @@ export function compute(inp: Inputs, data: Data, level: "preview" | "full" | "ro
   const coral: Coral = { ...presetCoral, ek: inp.coral.ek ?? presetCoral.ek,
     rOverPg: inp.coral.rOverPg !== undefined ? inp.coral.rOverPg : presetCoral.rOverPg ?? null };
   const wind = inp.wind ?? undefined;
-  const robEvery = Math.max(1, Math.ceil(all.length / 12));
   const out: ScenarioOut[] = [];
   let openRes: PeriodResult | null = null;
   const runs: PeriodResult[] = [];
@@ -131,10 +132,11 @@ export function compute(inp: Inputs, data: Data, level: "preview" | "full" | "ro
     const cs = constantScenario(site, water, inp.target, inp.height, days, data.tables, tauC, inp.tauFouled, inp.fouledShare ?? 0, cloth, spacing, nFacets, wind);
     lap("constant run");
     const so = summarizeScenario("constant", cs.panel, cs.result, pts, coral, inp.target);
+    so.contrast = noonContrast(cs.result, site);
     runs.push(cs.result);
     Tc = so.T; openRes = cs.result;
     lap("constant summary");
-    if (level === "robust") so.robustness = robustness(site, water, [cs.panel], targetGrid(inp.target, 0.1), all, data.tables, 16, [0.5, 1.5], [0.5, 0.9], [0, 10], 0.2, robEvery);
+    if (level === "robust") so.robustness = robustness(site, water, [cs.panel], targetGrid(inp.target, 0.1), all, data.tables, 16, [0.5, 1.5], [0.5, 0.9], [0, 10], 0.2, 1);
     lap("robustness");
     out.push(so);
   }
@@ -145,17 +147,10 @@ export function compute(inp: Inputs, data: Data, level: "preview" | "full" | "ro
       pan = panel({ lx: inp.canopy.lx, ly: inp.canopy.ly, cx: inp.canopy.cx, cy: inp.canopy.cy, rotDeg: inp.canopy.rot, height: inp.height, tau: 0 });
     } else {
       const targetT = inp.sync && Tc !== null ? Tc : 1 - inp.dynamicTargetReduction / 100;
-      const solveEvery = Math.max(1, Math.ceil(days.length / 20));
+      // every day of the run, on the reported grid (as Python), so the period light matches the target
       const s = solveDynamic(site, water, inp.target, inp.height, days, data.tables, targetT,
-        { spacing: Math.max(spacing, 0.1), nFacets, solveEvery, ...(wind !== undefined ? { wind } : {}), ...(guess ? { guess } : {}) });
+        { spacing, nFacets, solveEvery: 1, ...(wind !== undefined ? { wind } : {}), ...(guess ? { guess } : {}) });
       pan = s.panel;
-      if (s.feasible && solveEvery > 1 && pan.lx > 0.02) {
-        // one secant step on all days, so that the target holds for the whole period, not only the sampled days
-        const sp = targetGrid(inp.target, Math.max(spacing, 0.1));
-        const Tall = (W: number) => transmission(runPeriod(site, water, [{ ...pan, lx: W }], sp, days, data.tables, nFacets, wind, st));
-        const w1 = pan.lx, w2 = pan.lx * 1.03, f1 = Tall(w1) - targetT, f2 = Tall(w2) - targetT;
-        if (f2 !== f1) { const w3 = w1 - (f1 * (w2 - w1)) / (f2 - f1); if (w3 > 0.01 && Math.abs(w3 - w1) < 0.25 * w1) pan = { ...pan, lx: w3 }; }
-      }
       solve = { feasible: s.feasible, message: s.message, iterations: s.iterations };
       lap("solve");
       if (!s.feasible) warnings.push(s.message);
@@ -167,10 +162,13 @@ export function compute(inp: Inputs, data: Data, level: "preview" | "full" | "ro
     lap("dynamic summary");
     if (solve) so.solve = solve;
     const chk = clearanceCheck(r, inp.target, inp.height, site);
-    so.clearance = { share: chk.shareNeverSunlit, hRule: chk.hForSunBy0800ShadeFrom1000, hMin: chk.hMinAny, never: Array.from(chk.neverSunlit) };
+    so.clearance = { share: chk.shareNeverSunlit, hRule: chk.hForSunBy0800ShadeFrom1000, hRuleDay: chk.hRuleDay, hMin: chk.hMinAny, never: Array.from(chk.neverSunlit) };
+    so.contrast = noonContrast(r, site);
     if (chk.shareNeverSunlit > 0)
-      warnings.push(`${Math.round(100 * chk.shareNeverSunlit)} % of the coral area never gets direct sun under the canopy. A canopy about ${chk.hForSunBy0800ShadeFrom1000.toFixed(1)} m above the corals would let the morning sun reach all of it.`);
-    if (level === "robust") so.robustness = robustness(site, water, [pan], targetGrid(inp.target, 0.1), all, data.tables, 16, [0.5, 1.5], [0.5, 0.9], [0, 10], 0.2, robEvery);
+      warnings.push(`${Math.round(100 * chk.shareNeverSunlit)} % of the coral area never has the sun in line under the canopy. A canopy about ${chk.hForSunBy0800ShadeFrom1000.toFixed(1)} m above the corals would let the morning sun reach all of it on every day.`);
+    const cw = contrastWarning(so.contrast, beamShare(r), inp.depth);
+    if (cw) warnings.push(cw);
+    if (level === "robust") so.robustness = robustness(site, water, [pan], targetGrid(inp.target, 0.1), all, data.tables, 16, [0.5, 1.5], [0.5, 0.9], [0, 10], 0.2, 1);
     lap("robustness");
     openRes = openRes ?? r;
     out.push(so);
@@ -196,7 +194,7 @@ export function compute(inp: Inputs, data: Data, level: "preview" | "full" | "ro
       dayCurves: o.edOpen.map((dd) => Array.from(dd)), lightHist: openHist },
     minutes: Array.from(o.minutes[0]!), noon: solarNoon(y, m, d, inp.site.lon, inp.site.tz) + inp.noonShift,
     noons: days.map(([yy, mm, dd]) => solarNoon(yy, mm, dd, inp.site.lon, inp.site.tz) + inp.noonShift), histMax,
-    scenarios: out, warnings, timings: tm,
+    scenarios: out, warnings, timings: tm, beamShare: beamShare(o),
     lightNotes: lightWarnings(data.light, inp.site.lon, inp.site.tz, inp.start, Math.max(0, ...runs.map((rr) => rr.lightDropped ?? 0))),
   };
 }
@@ -224,7 +222,7 @@ export function computeRobustness(inp: Inputs, data: Data, panels: { constant?: 
   const site: Site = { lat: inp.site.lat, lon: inp.site.lon, tz: inp.site.tz, light: data.light, noonShift: inp.noonShift, step: 10 };
   const all = deploymentDays(inp.start, inp.end, 1);
   const water: Water = { kd: inp.water.kd, w0: inp.water.w0, depth: inp.depth };
-  const every = Math.max(1, Math.ceil(all.length / 12)), pts = targetGrid(inp.target, 0.1);
+  const every = 1, pts = targetGrid(inp.target, 0.1);   // every day
   const out: Record<string, { case: string; T: number }[]> = {};
   for (const [k, p] of Object.entries(panels)) if (p) out[k] = robustness(site, water, [p], pts, all, data.tables, 16, [0.5, 1.5], [0.5, 0.9], [0, 10], 0.2, every);
   return out;

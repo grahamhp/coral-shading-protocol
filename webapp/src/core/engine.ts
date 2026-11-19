@@ -152,7 +152,8 @@ export function panelMoments(pts: Float64Array, panels: readonly Panel[], water:
   return { C, S, nPoints: nP, nTheta: nT };
 }
 
-export interface DayResult { minutes: Float64Array; step: number; ed: Float64Array[]; edOpen: Float64Array; sunlit: Float64Array[] }
+export interface DayResult { minutes: Float64Array; step: number; ed: Float64Array[]; edOpen: Float64Array; sunlit: Float64Array[];
+  beamOpen: Float64Array }   // beamOpen: sun-beam part of the open-water light (within 3 deg of the refracted sun)
 
 /** Panel moments pre-reduced against the tabulated sun angles: D[j][m][p] = sum_i A_m^(j)[i] C_m[p,i] (and E with S).
  * Exact, because the engine interpolates A linearly in sun zenith; it turns the per-step broad sum from
@@ -185,7 +186,7 @@ function reduce(st: OpticalState, mom: Moments): Reduced {
 export function runDay(day: DayLight, water: Water, panels: readonly Panel[], pts: Float64Array, st: OpticalState, mom: Moments, nFacets = 64): DayResult {
   const nt = day.minutes.length, nP = pts.length / 2, nT = mom.nTheta;
   const ed: Float64Array[] = [], sunlit: Float64Array[] = [];
-  const edOpen = new Float64Array(nt);
+  const edOpen = new Float64Array(nt), beamOpen = new Float64Array(nt);
   const Tsky = skyTransmittance();
   const red = reduce(st, mom);
   let skyOpen = 0; for (let i = 0; i < nT; i++) skyOpen += st.skyA0[i]!;
@@ -272,6 +273,7 @@ export function runDay(day: DayLight, water: Water, panels: readonly Panel[], pt
     }
     const a0k = (1 - f) * a0[j]! + f * a0[j + 1]!;
     edOpen[k] = Fs * (beam + 2 * Math.PI * a0k) + Fk * 2 * Math.PI * skyOpen;
+    beamOpen[k] = Fs * beam;
   }
-  return { minutes: day.minutes, step: day.step, ed, edOpen, sunlit };
+  return { minutes: day.minutes, step: day.step, ed, edOpen, sunlit, beamOpen };
 }
