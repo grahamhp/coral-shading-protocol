@@ -390,11 +390,16 @@ function findW0() {
   try {
     const f = (pct: number) => w0FromReading(T, Math.max(pct, 0.01) / 100, pan, [0, 0], state.water.kd, state.depth, date, minute,
       state.site.lat, state.site.lon, state.site.tz, R.diffuse / 100, 0);
-    const mid = f(R.pct), lo = f(R.pct - R.err), hi = f(R.pct + R.err);
-    const r2 = (x: number) => +x.toFixed(2);
-    state.water.w0 = r2(mid.w0); state.water.w0Lo = r2(Math.min(lo.w0, hi.w0)); state.water.w0Hi = r2(Math.max(lo.w0, hi.w0)); ui.w0Source = "reading";
-    const edge = mid.status === "ok" ? "" : ` The reading is ${mid.status === "below" ? "darker" : "brighter"} than the model gives for any ω₀ in the tables (${fmt(100 * mid.ratioMin, 1)}–${fmt(100 * mid.ratioMax, 1)} %); check Kd, depth, the board and the time.`;
-    ui.w0Note = `From the reading: ω₀ ${fmt(mid.w0, 2)} (range ${fmt(state.water.w0Lo, 2)}–${fmt(state.water.w0Hi, 2)} for ±${R.err} %), with Kd ${state.water.kd} and the corals' depth ${state.depth} m.${edge}`;
+    const mid = f(R.pct);
+    if (mid.status !== "ok") {
+      ui.w0Note = `Not used: the reading (${fmt(R.pct, 1)} %) is ${mid.status === "below" ? "darker" : "brighter"} than the model gives for any ω₀ from ${W0B[0]} to ${W0B[1]} (${fmt(100 * mid.ratioMin, 1)}–${fmt(100 * mid.ratioMax, 1)} % for this board, time, Kd ${state.water.kd} and depth ${state.depth} m). Check Kd, the depth, the board size and height, and the time; ω₀ is unchanged.`;
+    } else {
+      const lo = f(R.pct - R.err), hi = f(R.pct + R.err);
+      const r2 = (x: number) => +x.toFixed(2);
+      state.water.w0 = r2(mid.w0); state.water.w0Lo = r2(Math.min(lo.w0, hi.w0)); state.water.w0Hi = r2(Math.max(lo.w0, hi.w0)); ui.w0Source = "reading";
+      const edge = lo.status !== "ok" || hi.status !== "ok" ? " Part of the ± range lies outside the tables, so the range is cut at their limit." : "";
+      ui.w0Note = `From the reading: ω₀ ${fmt(mid.w0, 2)} (range ${fmt(state.water.w0Lo, 2)}–${fmt(state.water.w0Hi, 2)} for ±${R.err} %), with Kd ${state.water.kd} and the corals' depth ${state.depth} m.${edge}`;
+    }
   } catch (e) { ui.w0Note = `Could not use the reading: ${e instanceof Error ? e.message : String(e)}`; }
   renderLeft(); schedule();
 }

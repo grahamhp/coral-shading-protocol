@@ -70,8 +70,14 @@ def main(argv=None) -> int:
             rd, rmin = a.start, solar.solar_noon(*a.start, a.lon, tz)
         board = Panel(lx=lx, ly=ly, height=h, tau=0.0)
         cal = lambda q: sc.w0_from_reading(max(q, 1e-4), board, (0.0, 0.0), a.kd, a.depth, rd, rmin, a.lat, a.lon, tz, diffuse_share=a.reading_diffuse)
-        mid = cal(ratio); w0 = round(mid["w0"], 3)
-        print(f"w0 from the reading: {w0:.3f} ({mid['status']}; the model gives {mid['ratio_min']:.3f}-{mid['ratio_max']:.3f} over the tables' w0)")
+        mid = cal(ratio)
+        if mid["status"] != "ok":
+            print(f"The reading {ratio:g} is {'darker' if mid['status'] == 'below' else 'brighter'} than the model gives for any w0 in the tables "
+                  f"({mid['ratio_min']:.3f}-{mid['ratio_max']:.3f} for this board, time, Kd and depth). Check Kd, depth, the board and the time.",
+                  file=sys.stderr)
+            return 2
+        w0 = round(mid["w0"], 3)
+        print(f"w0 from the reading: {w0:.3f} (the model gives {mid['ratio_min']:.3f}-{mid['ratio_max']:.3f} over the tables' w0)")
         if a.reading_err > 0:
             w_lo, w_hi = cal(ratio - a.reading_err)["w0"], cal(ratio + a.reading_err)["w0"]
             lo, hi = round(min(w_lo, w_hi), 3), round(max(w_lo, w_hi), 3)

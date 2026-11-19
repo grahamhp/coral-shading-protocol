@@ -18,7 +18,11 @@ From a scientific review of v5.0.0 (19 Nov 2026). Designs are unchanged except w
   reading. Python: `scenarios.w0_from_reading`; CLI `--w0-reading`, `--reading-time`, `--reading-diffuse`,
   `--reading-err`. Field protocol section 1b.
 - **Light tables extended to ω₀ 0.3, 0.4 and 0.95** (same Monte Carlo settings), so readings from clearer or
-  more strongly scattering water can be fitted.
+  more strongly scattering water can be fitted. The v5.0 entries are unchanged to the last digit. The engine was
+  checked against the 3-D Monte Carlo at the new values (54 more points; all 180 points now average +0.006 of
+  open-water light), and Kd round trips at the new values are tested.
+- A reading outside what any tabulated ω₀ can give is reported and not used (app and CLI); v5.1's first draft
+  clipped it to the nearest bound.
 - **Water presets** are published reef values only (clear 0.06, moderate 0.10, turbid inshore 0.45 m⁻¹); the
   example site's own Kd is no longer a preset. Help texts no longer rely on one site.
 

@@ -25,6 +25,9 @@ from . import SHARED, mc
 W0S_V50 = [0.5, 0.6, 0.7, 0.8, 0.9]          # shipped in v5.0 (seeds from 1000)
 W0S_V51 = [0.3, 0.4, 0.95]                     # added in v5.1 (seeds from 7000; split runs in chunks of 20,000 photons for memory)
 W0S = sorted(W0S_V50 + W0S_V51)
+# Split-transport runs re-done with 1,000,000 photons (same seeds): at 200,000 one heavily weighted photon left a
+# spike in the deep profile (light rising with depth over one step, at depths below 10^-5 of surface light).
+SPLIT_PHOTONS_OVERRIDE = {(0.4, "sun", 80.0): 1_000_000, (0.3, "sun", 40.0): 1_000_000}
 SUN_ZENITHS = [0.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 88.0]
 TAUS = [round(float(x), 5) for x in np.geomspace(0.05, 40.0, 24)]          # simulated optical depths
 _RATIO = (40.0 / 0.05) ** (1 / 23)
@@ -69,6 +72,8 @@ def _run(args, split: bool = False):
     w0, source, sunz, n, seed = args
     t0 = time.time()
     chunk = 20_000 if (split and w0 in W0S_V51) else 100_000
+    if split:
+        n = SPLIT_PHOTONS_OVERRIDE.get((w0, source, float(sunz)), n)
     r = mc.forward_tables(w0, source, sunz, taus=TAUS, n_photons=n, seed=seed + (50_000 if split else 0), split=split, chunk=chunk)
     bins = np.array(r["bins"])
     A = np.array([fourier_from_bins(bins[k]) for k in range(len(TAUS))])          # [tau, m, theta]

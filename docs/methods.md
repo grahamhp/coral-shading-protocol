@@ -126,7 +126,7 @@ E = F_s [B(θ_s) V + Σ_m Σ_i A_m,i(θ_s) (cos mφ_s C_m,i + sin mφ_s S_m,i)] 
 The engine treats light reaching the point from each direction as open-water light dimmed by the panels in
 that direction. It is checked against a 3-D backward Monte Carlo that follows light around the actual
 structure (*validation.md*): for structures 0.75 m above the corals, within −0.016 to +0.022 of open-water
-light; for a canopy 2 m up, light in the shade is up to 0.037 too high. *(engine.py)*
+light at ω₀ 0.3–0.85 (one sunlit point at ω₀ 0.95: −0.029); for a canopy 2 m up, light in the shade is up to 0.037 too high. *(engine.py)*
 
 Daily light (mol m⁻² d⁻¹) is the sum over steps; the period transmission T is the area-mean daily light summed
 over the deployment ÷ open-water daily light summed.
