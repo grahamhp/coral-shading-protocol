@@ -246,7 +246,7 @@ alternative was. Items marked **[needs you]** are waiting on your approval or in
     inside that span. 0.7 is the middle of 0.5–0.9; the ends are run on every day with the same structure and
     shown as "likely between … and …". At Kd 0.21 and 10 m the sun beam carries 29 %, 10 % and 0.8 % of the light
     at ω₀ 0.5, 0.7 and 0.9, so how much dynamic shading can differ from constant shading depends strongly on ω₀.
-    **[needs you]** confirm 0.7 (or choose another design value) before release.
+    Confirmed by Graham on 22 Nov 2026: 0.7, with the 0.5 to 0.9 range shown.
 55. **ω₀ from one board reading.** Under ÷ open beneath a level opaque board is monotonic in ω₀ and computed for
     the reading's own sun position and diffuse share, so one reading fits ω₀ and its spread gives the range.
     A board, not the structure, so that the reading does not depend on the cloth's transmission or on the design.
@@ -283,8 +283,9 @@ valid data, and a full-size place on reef-scuba.org. You also asked whether the 
     everywhere outside about 65° W to 65° E. Inside that band PVGIS has satellite data and is better (Mombasa: daily
     correlation 0.74); the app says so in its checks and keeps the PVGIS file route. Typical year: one real year
     per calendar month, chosen by the Finkelstein–Schafer statistic on daily irradiation (as ISO 15927-4, irradiance
-    only). **[needs you]** Open-Meteo's free service is for non-commercial use with attribution (in the footer); I
-    could not open its terms page from here, so please confirm REEF Scuba's use fits.
+    only). Open-Meteo's free service is for non-commercial use with attribution (in the footer). Graham confirmed on
+    22 Nov 2026 that REEF Scuba's use is non-commercial. I could not open the terms page from here, so the
+    wording of the terms themselves is still unread by me.
 63. **Ten example reefs with PVGIS typical years** travel with the app (5.4 MB in all), so it works offline at a
     conference table: Sipaway, Florida Keys, Belize, Bonaire, Eilat, Mombasa, Maldives, Lizard Island, Kāneʻohe
     Bay, Moorea. Their dates are examples in the local warm season, not advice.
