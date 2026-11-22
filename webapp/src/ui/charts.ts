@@ -1,5 +1,15 @@
 // SVG charts (no chart library: small, offline, printable).
-export const COLORS = { ink: "#0f2433", open: "#8aa4ba", cloth: "#2a9d8f", canopy: "#e8a33d", coral: "#e4572e", sea: "#087e8b", muted: "#5b6b78", grid: "#eceae3" };
+// Series colors checked with a colorblind-separation and contrast validator (cloth and canopy: all checks pass on white;
+// open water is a neutral reference line, dashed).
+export const COLORS = { ink: "#0f2433", open: "#6f879c", cloth: "#2a9d8f", canopy: "#cf7f10", coral: "#d1492a", sea: "#087e8b", muted: "#566573", grid: "#e6ebee" };
+
+/** Data behind a chart, for the pointer readout (crosshair and tooltip). Filled while charts are drawn. */
+export interface Hover { x: number[]; xmin: number; xmax: number; px0: number; px1: number; w: number; kind: "time" | "day"; labels?: string[];
+  unit: string; digits: number; series: { name: string; color: string; dash?: string; y: number[] }[] }
+export const HOVER = new Map<string, Hover>();
+let hoverN = 0;
+export function resetHover() { HOVER.clear(); hoverN = 0; }
+function regHover(h: Hover): string { const id = `h${hoverN++}`; HOVER.set(id, h); return id; }
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 const f1 = (v: number) => v.toFixed(1);
@@ -12,7 +22,7 @@ function niceStep(max: number, n = 5): number {
 }
 
 /** Light over a day. x in minutes after midnight. */
-export function lineChart(series: Series[], opts: { w?: number; h?: number; ylab: string; xmin?: number; xmax?: number; noon?: number }): string {
+export function lineChart(series: Series[], opts: { w?: number; h?: number; ylab: string; xmin?: number; xmax?: number; noon?: number; unit?: string }): string {
   const w = opts.w ?? 560, h = opts.h ?? 230, L = 52, B = 34, Tp = 10, R = 10;
   let xmin = opts.xmin ?? Infinity, xmax = opts.xmax ?? -Infinity, ymax = 1;
   for (const s of series) for (let i = 0; i < s.x.length; i++) if (s.y[i]! > 0.5) { if (opts.xmin === undefined) xmin = Math.min(xmin, s.x[i]! - 30); if (opts.xmax === undefined) xmax = Math.max(xmax, s.x[i]! + 30); }
@@ -20,7 +30,9 @@ export function lineChart(series: Series[], opts: { w?: number; h?: number; ylab
   if (!Number.isFinite(xmin)) { xmin = 300; xmax = 1140; }
   ymax *= 1.08;
   const X = (m: number) => L + ((m - xmin) / (xmax - xmin)) * (w - L - R), Y = (v: number) => Tp + (1 - v / ymax) * (h - Tp - B);
-  const o: string[] = [`<svg viewBox="0 0 ${w} ${h}" width="100%" role="img" aria-label="${esc(opts.ylab)}">`];
+  const hid = regHover({ x: Array.from(series[0]?.x ?? []), xmin, xmax, px0: L, px1: w - R, w, kind: "time", unit: opts.unit ?? "µmol m⁻² s⁻¹", digits: 0,
+    series: series.map((s) => ({ name: s.name, color: s.color, ...(s.dash ? { dash: s.dash } : {}), y: Array.from(s.y) })) });
+  const o: string[] = [`<svg viewBox="0 0 ${w} ${h}" width="100%" role="img" aria-label="${esc(opts.ylab)}" data-hv="${hid}">`];
   const st = niceStep(ymax);
   for (let v = 0; v <= ymax; v += st) o.push(`<line x1="${L}" x2="${w - R}" y1="${f1(Y(v))}" y2="${f1(Y(v))}" stroke="${COLORS.grid}"/><text x="${L - 8}" y="${f1(Y(v) + 4)}" font-size="11" fill="${COLORS.muted}" text-anchor="end">${+v.toFixed(3)}</text>`);
   for (let hr = Math.ceil(xmin / 120) * 2; hr * 60 <= xmax; hr += 2) o.push(`<text x="${f1(X(hr * 60))}" y="${h - 12}" font-size="11" fill="${COLORS.muted}" text-anchor="middle">${String(hr).padStart(2, "0")}:00</text>`);
@@ -33,6 +45,7 @@ export function lineChart(series: Series[], opts: { w?: number; h?: number; ylab
     o.push(`<polyline points="${pts.join(" ")}" fill="none" stroke="${s.color}" stroke-width="2.4" stroke-dasharray="${s.dash ?? ""}" stroke-linejoin="round"><title>${esc(s.name)}</title></polyline>`);
   }
   const cy = (h - B) / 2 + Tp;
+  o.push(`<line class="xh" x1="0" x2="0" y1="${Tp}" y2="${h - B}" stroke="${COLORS.ink}" stroke-width="1" opacity="0"/>`);
   o.push(`<text x="14" y="${cy}" font-size="11" fill="${COLORS.muted}" transform="rotate(-90 14 ${cy})" text-anchor="middle">${esc(opts.ylab)}</text></svg>`);
   return o.join("");
 }
@@ -133,18 +146,28 @@ export function peChart(ek: number, ec: number, hists: { name: string; color: st
 }
 
 /** Daily light at the corals through the deployment: open water and each kind of shading. */
-export function dailyLightChart(days: [number, number, number][], lines: { y: number[]; color: string; name: string; dash?: string }[]): string {
-  const w = 560, h = 300, L = 40, B = 26, Tp = 10, R = 12, n = days.length;
+export function dailyLightChart(days: [number, number, number][], lines: { y: number[]; color: string; name: string; dash?: string }[], mark?: number): string {
+  const w = 560, h = 290, L = 40, B = 26, Tp = 10, R = 12, n = days.length;
   const ymax = Math.max(1, ...lines.flatMap((l) => l.y)) * 1.06, st = niceStep(ymax, 5);
   const X = (i: number) => L + (n > 1 ? i / (n - 1) : 0.5) * (w - L - R), Y = (v: number) => Tp + (1 - v / ymax) * (h - Tp - B);
-  const o: string[] = [`<svg viewBox="0 0 ${w} ${h}" width="100%" role="img" aria-label="Daily light at the corals through the deployment">`];
+  const hid = regHover({ x: days.map((_, i) => i), xmin: 0, xmax: Math.max(1, n - 1), px0: L, px1: w - R, w, kind: "day", labels: days.map(([, m, d]) => `${MON[m]} ${d}`),
+    unit: "mol m⁻² d⁻¹", digits: 1, series: lines.map((l) => ({ name: l.name, color: l.color, ...(l.dash ? { dash: l.dash } : {}), y: l.y })) });
+  const o: string[] = [`<svg viewBox="0 0 ${w} ${h}" width="100%" role="img" aria-label="Daily light at the corals through the deployment" data-hv="${hid}">`];
   for (let v = 0; v <= ymax; v += st) o.push(`<line x1="${L}" x2="${w - R}" y1="${f1(Y(v))}" y2="${f1(Y(v))}" stroke="${COLORS.grid}"/><text x="${L - 6}" y="${f1(Y(v) + 4)}" font-size="11" fill="${COLORS.muted}" text-anchor="end">${+v.toFixed(1)}</text>`);
   for (const l of lines) o.push(`<polyline points="${l.y.map((v, i) => `${f1(X(i))},${f1(Y(v))}`).join(" ")}" fill="none" stroke="${l.color}" stroke-width="${l.dash ? 1.6 : 2.2}"${l.dash ? ` stroke-dasharray="${l.dash}"` : ""}><title>${esc(l.name)}</title></polyline>`);
+  if (mark !== undefined && mark >= 0) o.push(`<line x1="${f1(X(mark))}" x2="${f1(X(mark))}" y1="${Tp}" y2="${f1(Y(0))}" stroke="${COLORS.muted}" stroke-dasharray="2 4" opacity=".7"/>`);
   // month ticks on the 1st; the first day is labeled only if no tick follows within 8 days
   const ticks: [number, string][] = [];
   days.forEach(([, m, d], i) => { if (d === 1) ticks.push([i, `${MON[m]} 1`]); });
   if (!ticks.length || ticks[0]![0] > 8) ticks.unshift([0, `${MON[days[0]![1]]} ${days[0]![2]}`]);
   for (const [i, lab] of ticks) o.push(`<line x1="${f1(X(i))}" x2="${f1(X(i))}" y1="${f1(Y(0))}" y2="${f1(Y(0) + 4)}" stroke="${COLORS.muted}"/><text x="${f1(X(i))}" y="${h - 8}" font-size="11" fill="${COLORS.muted}" text-anchor="middle">${lab}</text>`);
+  o.push(`<line class="xh" x1="0" x2="0" y1="${Tp}" y2="${h - B}" stroke="${COLORS.ink}" stroke-width="1" opacity="0"/>`);
   o.push(`<text x="${L + 4}" y="${Tp + 10}" font-size="10.5" fill="${COLORS.muted}">mol m⁻² d⁻¹</text></svg>`);
   return o.join("");
+}
+
+/** A horizontal bar for a table cell (share of `max`), with the value beside it. The text keeps the ink color. */
+export function barCell(value: number, max: number, color: string, text: string): string {
+  const pct = Math.max(0, Math.min(100, (100 * value) / max));
+  return `<span class="bar"><span class="bar-t"><span class="bar-f" style="width:${pct.toFixed(1)}%;background:${color}"></span></span><span class="bar-v">${text}</span></span>`;
 }

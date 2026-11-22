@@ -17,3 +17,32 @@ These need the repository owner (GitHub settings, Zenodo).
    release `v5.0.0`. Zenodo archives it and issues a DOI. Add the DOI to `CITATION.cff` and `README.md`.
 6. **Python package (optional):** `python -m build` in `python/`, then `twine upload dist/*` to PyPI as
    `coral-shading-protocol`.
+
+# Release steps for v5.1.0
+
+1. Review the branch `v5.1.0` (pull request into `main`). Merging publishes the app, because the workflow deploys
+   `main` to GitHub Pages once both test suites pass.
+2. Before merging: confirm the design ω₀ of 0.7 (DECISIONS 54) and the release date in `CITATION.cff`.
+3. **Check:** `cd python && python -m pytest`; `cd webapp && npx tsc -p tsconfig.json && npm test && npm run build`.
+   Open `webapp/dist/index.html`; run the example in simple and expert mode, and in expert mode try a board
+   reading, Kd by date, a tide series and fouling.
+4. After merging: tag `v5.1.0` on `main` and create the GitHub release (Zenodo then issues a new version DOI).
+
+# Release steps for v5.2.0
+
+1. Review the branch `v5.2.0` (it contains v5.1.0). Open `webapp/dist/index.html` after `npm run build`, or the
+   preview file sent with the work. Decide the two items marked **[needs you]** in DECISIONS 62 and 64.
+   *(Done 22 Nov 2026: both decided, and the starting point and coral adjustment set in DECISIONS 69 and 70.)*
+2. **Check:** `cd python && python -m pytest`; `cd webapp && npx tsc -p tsconfig.json && npm test && npm run build`.
+   In the app: try three example reefs, a site with no example (weather is fetched), a PVGIS file, Expert mode.
+3. Merge `v5.2.0` into `main`. The workflow then publishes the app to GitHub Pages once both test suites pass.
+   *(Done 22 Nov 2026, with the website page in step 5.)*
+4. Tag `v5.2.0` on `main` and create the GitHub release (Zenodo then issues a new version DOI). **Not done yet:**
+   this mints a DOI, so it waits for the owner's go-ahead.
+5. **Website.** The page reef-scuba.org/coral-shading-tool serves its own copy of the app from
+   `public/embeds/coral-shading-protocol.html` in the website repository. After a new release:
+   `node scripts/update-shading-tool.mjs` there, set the version in `src/pages/coral-shading-tool.astro`, commit.
+6. **Conference laptop.** Save `webapp/dist/index.html` (or the published page) to the laptop and open the file:
+   the ten example reefs, all calculations and exports work offline; the map, place search and weather for new
+   sites need internet.
+

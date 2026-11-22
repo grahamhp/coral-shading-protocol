@@ -1,0 +1,100 @@
+{
+ "description": "Open-Meteo ERA5 archive (models=era5) against PVGIS 5.3 hourly series, 2014-2023, global horizontal irradiance. Hourly statistics over hours with more than 20 W m-2 in either series (PVGIS-ERA5 sites); daily totals in local days (all sites). Timing: mean offset of the light's centre of mass from solar noon on clear days, with each value placed at its time stamp.",
+ "date": "2026-11-22",
+ "sites": [
+  {
+   "site": "Sipaway, Philippines",
+   "lat": 10.4675,
+   "lon": 123.4506,
+   "pvgis_database": "PVGIS-ERA5",
+   "hourly_r": 0.9928,
+   "hourly_bias_pct": 2.8,
+   "hourly_rmse_W": 33.3,
+   "diffuse_share_pvgis": 0.339,
+   "diffuse_share_open_meteo": 0.333,
+   "daily_r": 0.989,
+   "daily_bias_pct": 2.9
+  },
+  {
+   "site": "Florida Keys, USA",
+   "lat": 24.63,
+   "lon": -81.11,
+   "pvgis_database": "PVGIS-ERA5",
+   "hourly_r": 0.9958,
+   "hourly_bias_pct": -0.2,
+   "hourly_rmse_W": 25.4,
+   "diffuse_share_pvgis": 0.264,
+   "diffuse_share_open_meteo": 0.265,
+   "daily_r": 0.993,
+   "daily_bias_pct": -0.1
+  },
+  {
+   "site": "Lizard Island, Australia",
+   "lat": -14.67,
+   "lon": 145.46,
+   "pvgis_database": "PVGIS-ERA5",
+   "hourly_r": 0.9931,
+   "hourly_bias_pct": 2.3,
+   "hourly_rmse_W": 37.6,
+   "diffuse_share_pvgis": 0.285,
+   "diffuse_share_open_meteo": 0.279,
+   "daily_r": 0.998,
+   "daily_bias_pct": 2.4
+  },
+  {
+   "site": "Moorea, French Polynesia",
+   "lat": -17.49,
+   "lon": -149.83,
+   "pvgis_database": "PVGIS-ERA5",
+   "hourly_r": 0.9991,
+   "hourly_bias_pct": 0.7,
+   "hourly_rmse_W": 13.2,
+   "diffuse_share_pvgis": 0.273,
+   "diffuse_share_open_meteo": 0.271,
+   "daily_r": 1.0,
+   "daily_bias_pct": 0.8
+  },
+  {
+   "site": "Eilat, Red Sea",
+   "lat": 29.5,
+   "lon": 34.92,
+   "pvgis_database": "PVGIS-SARAH3",
+   "daily_r": 0.971,
+   "daily_bias_pct": 2.2,
+   "daily_rmse_MJ": 1.59
+  },
+  {
+   "site": "Mombasa, Kenya",
+   "lat": -4.05,
+   "lon": 39.72,
+   "pvgis_database": "PVGIS-SARAH3",
+   "daily_r": 0.741,
+   "daily_bias_pct": -6.7,
+   "daily_rmse_MJ": 3.91
+  }
+ ],
+ "timing_clear_day_centroid_minutes_after_stamp": {
+  "pvgis_tmy_era5": {
+   "sipaway": 26.8,
+   "florida_keys": 25.5,
+   "belize": 24.8,
+   "bonaire": 24.2,
+   "maldives": 26.1,
+   "kaneohe": 27.6,
+   "moorea": 27.7,
+   "bali": 27.1
+  },
+  "pvgis_tmy_sarah3": {
+   "eilat": 9.5,
+   "eilat_header_offset_min": 9.2
+  },
+  "open_meteo_era5": {
+   "sipaway": -29.2,
+   "florida_keys": -31.9,
+   "lizard_island": -31.2,
+   "moorea": -30.3,
+   "eilat": -29.7,
+   "mombasa": -34.0
+  }
+ }
+}

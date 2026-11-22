@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "coral-shading-protocol"
-version = "5.0.0"
+version = "5.2.0"
 description = "Light under coral shading structures: shade cloth and opaque canopies"
 readme = "README.md"
 license = {text = "MIT"}

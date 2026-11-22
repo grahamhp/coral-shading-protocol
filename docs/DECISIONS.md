@@ -221,3 +221,113 @@ alternative was. Items marked **[needs you]** are waiting on your approval or in
     come out larger and tall canopies reach a given light cut less often than at 0.7. The 0.5–0.9 range and the
     golden test values (which set ω₀ explicitly) are unchanged.
 
+## 19 November 2026: scientific review and v5.1.0
+
+51. **Shortcuts measured, then removed.** Every shortcut in v5.0.0 was rerun on all days at Sipaway (103 days): the
+    canopy solve on about 20 days (0.16 cm, 0.05 percentage points), robustness on about 12 days (at most 0.08
+    points), the clearance rule on the first day (2.56 m against 2.74 m on 21 June). All now use every day; the
+    canopy is solved on the reported grid. The app preview keeps every tenth day.
+52. **Dynamic shading can barely differ from constant shading.** At ω₀ 0.9, Kd 0.21 and 10 m, 0.7 % of the light
+    at depth arrives as the sun beam (30 % on a clear day at ω₀ 0.5). Matching the cloth's period light then gives
+    a narrow canopy whose noon light (32 %) is close to its morning and afternoon light (36 %). The 3-D Monte Carlo
+    agrees with the engine at ω₀ 0.85, so this is the physics at that scattering, not the engine. New CHECK when
+    noon light exceeds 0.8 of morning and afternoon light; beam share and noon contrast reported.
+53. **Held-fixed inputs stated.** One Kd and a fixed depth on every day, and typical-year days: light ratios are
+    insensitive (Kd × 0.5–1.5 at most 2.7 points; ±0.75 m depth under 0.3; real years 2014–2023 under 0.11),
+    absolute daily light is not (satellite Kd near Sipaway, 10th to 90th percentile 0.089–0.141, spans about
+    1.7-fold in light at 10 m). Every export now says so. Daily Kd and tide inputs are left for a decision.
+
+## 19 November 2026: designed for any site (v5.1.0, second part)
+
+54. **Default ω₀ back to 0.7, with the range on every result** (replaces 50; follows your instruction that nothing
+    should rest on one site). Published ω₀ spans 0.25 (Petzold's clear ocean) to 0.83 (turbid harbor), and
+    radiative-transfer work treats 0.1–0.9 as absorbing to scattering water; reef waters absorb and scatter more
+    than the ocean water next to them (Russell et al. 2019). One site's readings (Sipaway, 0.85–0.9) are one point
+    inside that span. 0.7 is the middle of 0.5–0.9; the ends are run on every day with the same structure and
+    shown as "likely between … and …". At Kd 0.21 and 10 m the sun beam carries 29 %, 10 % and 0.8 % of the light
+    at ω₀ 0.5, 0.7 and 0.9, so how much dynamic shading can differ from constant shading depends strongly on ω₀.
+    Confirmed by Graham on 22 Nov 2026: 0.7, with the 0.5 to 0.9 range shown.
+55. **ω₀ from one board reading.** Under ÷ open beneath a level opaque board is monotonic in ω₀ and computed for
+    the reading's own sun position and diffuse share, so one reading fits ω₀ and its spread gives the range.
+    A board, not the structure, so that the reading does not depend on the cloth's transmission or on the design.
+56. **Tables extended to ω₀ 0.3, 0.4, 0.95** so that clear-water and strongly scattering readings can be fitted
+    rather than clipped. Same photon numbers and seeds scheme as the shipped tables.
+57. **Kd by date, tide, fouling over time, acclimation over time** (left open in 53): each changes absolute daily
+    light and coral metrics more than design ratios. Kd by date keeps ω₀; the tide keeps the beam attenuation per
+    meter; fouling uses the exact linearity in one panel's transmission; acclimation uses a 2.5-day time constant
+    from Anthony & Hoegh-Guldberg (2003). The fixed share of time fouled stays in Python for v5.0 scripts.
+58. **Circumsolar sky (Hay & Davies 1980).** Isotropic sky light underestimated light near the sun's direction,
+    which a canopy blocks at midday. Effect in the example: cloth 25.4 → 25.0 % of open water, canopy 2 cm narrower.
+59. **Kept fixed, stated as a limit:** the particle phase function (backscatter ratio 0.0183). Reef particles can
+    backscatter about 3 % (Russell et al. 2019); this matters less under a structure than ω₀ and would need new
+    tables for every ω₀.
+60. **App speed fix.** V8 deoptimized the inner loops after a few runs because panels of several object shapes
+    reached them (robustness 30 s instead of 3 s); panels are now copied into one fixed shape first.
+
+## 22 November 2026: ready to show (v5.2.0)
+
+Asked for: a tool that is intuitive in Simple mode, detailed in Expert mode, with tables that inform choices,
+valid data, and a full-size place on reef-scuba.org. You also asked whether the day curves are right.
+
+61. **The day curves: one bug, one artifact, and the physics.** (a) *Bug.* PVGIS-SARAH3 values (Europe, Africa, the
+    Red Sea, the western Indian Ocean) are for a few minutes past the hour; the app placed every value on the half
+    hour, which put that light 39 minutes early (skewed days, light cut off before sunset) and refused SARAH-3
+    hourly series. Fixed: every value keeps its own time. ERA5 sites (Sipaway, the Pacific, the Americas) were
+    placed correctly. (b) *Artifact.* Hourly data were spread within each hour at constant clearness, so the curve
+    jumped at every hour boundary. Now the clearness is interpolated between hours and each hour still keeps its
+    total; designs unchanged (canopy 0.04 cm). (c) *Physics.* On cloudy days a canopy shades like a cloth because
+    the light comes from the whole sky; the day view now says so and offers the average, clearest and cloudiest
+    day. Checked against the Monte Carlo on five days through the deployment (validation, section 4).
+62. **Weather for any site: ERA5 through Open-Meteo, PVGIS stays the reference** (you chose this "if it's as good").
+    It is as good where PVGIS itself uses ERA5 (hourly correlation 0.993–0.999, mean within 3 %), which is
+    everywhere outside about 65° W to 65° E. Inside that band PVGIS has satellite data and is better (Mombasa: daily
+    correlation 0.74); the app says so in its checks and keeps the PVGIS file route. Typical year: one real year
+    per calendar month, chosen by the Finkelstein–Schafer statistic on daily irradiation (as ISO 15927-4, irradiance
+    only). Open-Meteo's free service is for non-commercial use with attribution (in the footer). Graham confirmed on
+    22 Nov 2026 that REEF Scuba's use is non-commercial. I could not open the terms page from here, so the
+    wording of the terms themselves is still unread by me.
+63. **Ten example reefs with PVGIS typical years** travel with the app (5.4 MB in all), so it works offline at a
+    conference table: Sipaway, Florida Keys, Belize, Bonaire, Eilat, Mombasa, Maldives, Lizard Island, Kāneʻohe
+    Bay, Moorea. Their dates are examples in the local warm season, not advice.
+64. **Coral numbers: "first days" beside "once adjusted".** Settled on 22 Nov 2026 by item 69: both are shown, and
+    "once adjusted" now uses a low extent of adjustment by default. With the v5.1 default (Ek follows the
+    shade within about a week, Pmax and respiration fixed) an adjusted coral photosynthesizes almost as much under
+    90 % shade as unshaded (P:R 1.15 against 1.12), so the adjusted numbers could not rank shade levels. The app
+    now also shows the corals as they are when the shade goes up (Ek as in open water at this depth): under the
+    example's 80 % cloth, photosynthesis 42 % of unshaded and P:R 0.44, against 1.04 unshaded. The shade-rating
+    table uses these. The wording is neutral (a note, not a warning) and says the truth lies between. Alternative:
+    show only the adjusted values, as v5.1 did. The example now shows a first-days energy deficit for the 80 %
+    cloth used at Sipaway; please check that this is how you want it presented.
+65. **Shade-rating table without new light runs.** Light under a cloth is exactly linear in its transmission
+    (already used for fouling), so 30, 50, 70, 80 and 90 % cloths of the same size follow from the one run; only
+    the coral metrics are recomputed. The trials cited beside it (Coelho et al. 2017; Butcherine et al. 2023;
+    Tagliafico et al. 2022) were checked on the publishers' pages. The app states that it does not predict
+    bleaching.
+66. **Default cloth stays 80 %** (no evidence-based reason to move it; the ratings table shows the alternatives).
+    Superseded on 22 Nov 2026 by item 70.
+67. **Interface.** Simple mode asks five questions in plain words; Expert adds every variable, the coral response,
+    month by month, other conditions and other canopy widths. Series colors were checked for color-blind separation
+    and contrast (canopy amber darkened to #cf7f10). Charts show values under the pointer. When embedded, the app
+    reports its height to the host page so the frame has no scrollbar of its own.
+68. **Python.** `design(light="era5")` and `--light era5` use the same Open-Meteo request and typical-year method
+    as the app; `surface.typical_year` and `surface.parse_open_meteo` are covered by shared golden values.
+69. **Corals adjust only a little to the shade by default** (your decision, 22 Nov 2026: start low, to err on the
+    side of caution about how much shade to apply and how well corals adjust; the user can change it). Implemented
+    as an extent of adjustment between 0 and 1: the Ek the corals move to is Ek at this depth + extent × (Ek matched
+    to the shade − Ek at this depth). The app offers None (0), **Low (0.25, the start)**, Medium (0.5) and Full (1),
+    and any value in Expert mode; Python `design(acclimation_extent=0.25)`, CLI `--acclimation-extent`. Full is the
+    v5.1 behavior. The value 0.25 for "Low" is my choice of a round, clearly low number, not a measured one; the app
+    and the methods say so. Change `EXTENT_DEFAULT` (app.ts) and the two Python defaults if you want another value.
+    The reference values of v5.1 are unchanged (extent 1); a new shared case covers extent 0.25.
+70. **Starting point: a 50 % shade cloth and corals at 5 m** (your decision, 22 Nov 2026), in the app, `design()`
+    and the command line. For a canopy designed on its own the starting target is now 50 % less light (was 75 %),
+    to match; this one is my addition, say if you want 75 % back. The Sipaway examples in the READMEs and the
+    tests name 10 m and 80 % explicitly, so they still describe the real deployment.
+71. **What the new start shows** (Sipaway, 28 Apr to 8 Aug, typical coral): light at the corals 52 % of unshaded
+    (likely 51 to 58 %), daily light 12.1 against 23.2 mol m⁻² d⁻¹; cloth 2.68 × 1.71 m, matched canopy
+    0.65 × 1.35 m. Energy balance (P:R): 0.80 in the first days and 0.87 once adjusted under the cloth, 0.74 and
+    0.78 under the canopy, 1.07 unshaded (with Full adjustment: 1.15 and 0.98). Two checks therefore show on the
+    opening screen: the energy balance is below 1, and the matched canopy is narrower than the coral area. Both
+    follow from the settings and are stated as they are.
+72. **Runs without a background worker** where a window refuses one (22 Nov 2026, after the app stayed on
+    "Computing..." in a sandboxed preview). Same stages, same values.

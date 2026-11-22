@@ -5,7 +5,8 @@ import argparse
 import json
 import sys
 
-from . import __version__, design as D
+from . import __version__, conditions, design as D, scenarios as sc, solar, surface
+from .geometry import Panel
 
 
 def _date(s: str) -> tuple:
@@ -21,14 +22,29 @@ def main(argv=None) -> int:
     p.add_argument("--tz", type=float, help="UTC offset in hours (default: longitude / 15)")
     p.add_argument("--start", type=_date, required=True); p.add_argument("--end", type=_date, required=True)
     p.add_argument("--target", default="reef_star", help="reef_star | table | rope | rect:LXxLY | circle:D")
-    p.add_argument("--depth", type=float, default=10.0); p.add_argument("--height", type=float, default=0.75)
-    p.add_argument("--kd", type=float, default=0.10); p.add_argument("--w0", type=float, default=0.9)
+    p.add_argument("--depth", type=float, default=5.0); p.add_argument("--height", type=float, default=0.75)
+    p.add_argument("--kd", type=float, default=0.10, help="Kd (PAR), m-1")
+    p.add_argument("--w0", type=float, default=0.7, help="water scattering used for the design (0.3-0.95)")
+    p.add_argument("--w0-range", default="0.5-0.9", help="range of w0 shown with every result, LOW-HIGH")
+    p.add_argument("--w0-reading", nargs=4, type=float, metavar=("RATIO", "LX", "LY", "HEIGHT"),
+                   help="field reading under an opaque board, read at its center (light under / open water, board size and "
+                        "height above the sensor in m); sets w0 (and, with --reading-err, the w0 range) and prints it")
+    p.add_argument("--reading-time", help="local date and time of the reading, 'YYYY-MM-DD HH:MM' (default: solar noon of --start)")
+    p.add_argument("--reading-diffuse", type=float, default=0.3, help="diffuse share of PAR above the water at the reading (default 0.3)")
+    p.add_argument("--reading-err", type=float, default=0.0, help="uncertainty of the reading ratio (same units as RATIO)")
+    p.add_argument("--kd-series", help="CSV of 'date, Kd' through the deployment")
+    p.add_argument("--tide", help="CSV of 'local date time, water level (m)' covering the deployment")
+    p.add_argument("--fouling", nargs=4, type=float, metavar=("TAU_CLEAN", "TAU_FOULED", "DAYS_TO_FOUL", "CLEAN_EVERY"),
+                   help="cloth fouling timeline: transmission clean and fouled, days to foul fully, days between cleanings (0 = never)")
     p.add_argument("--scenario", choices=["constant", "dynamic", "both"], default="both")
     p.add_argument("--no-sync", action="store_true", help="size the canopy for --reduction instead of matching the cloth")
-    p.add_argument("--rating", type=float, default=80.0, help="cloth shade rating, percent")
-    p.add_argument("--reduction", type=float, default=75.0, help="canopy target light reduction, percent")
-    p.add_argument("--coral", default="typical"); p.add_argument("--acclimate", choices=["site", "shade", "none"], default="site")
-    p.add_argument("--light", default="tmy", help="tmy | example | YEAR0-YEAR1 | path to a PVGIS CSV")
+    p.add_argument("--rating", type=float, default=50.0, help="cloth shade rating, percent")
+    p.add_argument("--reduction", type=float, default=50.0, help="canopy target light reduction, percent")
+    p.add_argument("--coral", default="typical")
+    p.add_argument("--acclimate", choices=["time", "site", "shade", "none"], default="time")
+    p.add_argument("--acclimation-extent", type=float, default=0.25,
+                   help="how far the corals adjust to the shade, 0-1 (default 0.25, a cautious assumption; 1 = fully)")
+    p.add_argument("--light", default="tmy", help="tmy (PVGIS) | era5 (Open-Meteo, any site) | example | clearsky | YEAR0-YEAR1 | path to a PVGIS CSV")
     p.add_argument("--spacing", type=float, default=0.05)
     p.add_argument("--noon-shift", type=float, default=0.0, help="shift solar noon, minutes (+ = later)")
     p.add_argument("--wind", type=float, help="wind speed at 10 m, m s-1 (default: from the light data)")
@@ -44,9 +60,40 @@ def main(argv=None) -> int:
     light = a.light
     if "-" in light and light.replace("-", "").isdigit():
         y0, y1 = light.split("-"); light = (int(y0), int(y1))
-    r = D.design(a.lat, a.lon, a.tz, a.start, a.end, tgt, a.depth, a.height, a.kd, a.w0, a.scenario, not a.no_sync, a.rating,
-                 dynamic_reduction=a.reduction, coral=a.coral, acclimate=a.acclimate, light=light, spacing=a.spacing,
-                 noon_shift=a.noon_shift, wind=a.wind)
+    tz = a.tz if a.tz is not None else surface.utc_offset_from_lon(a.lon)
+    lo, hi = (float(v) for v in a.w0_range.split("-"))
+    w0 = a.w0
+    if a.w0_reading:
+        ratio, lx, ly, h = a.w0_reading
+        if a.reading_time:
+            t = conditions._parse_datetime_min(a.reading_time)
+            rd = tuple(int(x) for x in a.reading_time.strip()[:10].split("-")); rmin = t - solar.days_from_civil(*rd) * 1440.0
+        else:
+            rd, rmin = a.start, solar.solar_noon(*a.start, a.lon, tz)
+        board = Panel(lx=lx, ly=ly, height=h, tau=0.0)
+        cal = lambda q: sc.w0_from_reading(max(q, 1e-4), board, (0.0, 0.0), a.kd, a.depth, rd, rmin, a.lat, a.lon, tz, diffuse_share=a.reading_diffuse)
+        mid = cal(ratio)
+        if mid["status"] != "ok":
+            print(f"The reading {ratio:g} is {'darker' if mid['status'] == 'below' else 'brighter'} than the model gives for any w0 in the tables "
+                  f"({mid['ratio_min']:.3f}-{mid['ratio_max']:.3f} for this board, time, Kd and depth). Check Kd, depth, the board and the time.",
+                  file=sys.stderr)
+            return 2
+        w0 = round(mid["w0"], 3)
+        print(f"w0 from the reading: {w0:.3f} (the model gives {mid['ratio_min']:.3f}-{mid['ratio_max']:.3f} over the tables' w0)")
+        if a.reading_err > 0:
+            w_lo, w_hi = cal(ratio - a.reading_err)["w0"], cal(ratio + a.reading_err)["w0"]
+            lo, hi = round(min(w_lo, w_hi), 3), round(max(w_lo, w_hi), 3)
+            print(f"w0 range for the reading +/- {a.reading_err}: {lo:.3f}-{hi:.3f}")
+    kds = conditions.kd_series_from_csv(open(a.kd_series, encoding="utf-8").read()) if a.kd_series else None
+    tide = conditions.tide_from_csv(open(a.tide, encoding="utf-8").read()) if a.tide else None
+    foul = None
+    if a.fouling:
+        tc, tf, dtf, every = a.fouling
+        foul = conditions.Fouling(tau_clean=tc, tau_fouled=tf, days_to_foul=dtf, clean_every=int(every))
+    r = D.design(a.lat, a.lon, tz=tz, start=a.start, end=a.end, target=tgt, depth=a.depth, height=a.height, kd=a.kd, w0=w0,
+                 w0_range=(lo, hi), scenario=a.scenario, sync=not a.no_sync, cloth_rating=a.rating, dynamic_reduction=a.reduction,
+                 coral=a.coral, acclimate=a.acclimate, acclimation_extent=a.acclimation_extent, light=light, spacing=a.spacing, noon_shift=a.noon_shift, wind=a.wind,
+                 kd_series=kds, tide=tide, fouling=foul, tau_clean=foul.tau_clean if foul else None)
     print(r.summary())
     if a.out:
         for f in r.to_csv(a.out):

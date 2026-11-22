@@ -1,6 +1,6 @@
 {
   "name": "coral-shading-protocol",
-  "version": "5.0.0",
+  "version": "5.2.0",
   "private": true,
   "type": "module",
   "description": "Coral Shading Protocol v5: light under shade cloth and opaque canopies, in the browser",
@@ -9,7 +9,7 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "test": "node --test --test-isolation=none tests/",
+    "test": "node --test \"tests/*.test.ts\"",
     "serve": "node scripts/serve.mjs"
   },
   "dependencies": {

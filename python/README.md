@@ -5,12 +5,12 @@ identical results; the test suites check this.
 
 ```
 pip install .
-coralshading design --lat 10.4675 --lon 123.4506 --tz 8 --start 2025-04-28 --end 2025-08-08 --kd 0.21
+coralshading design --lat 10.4675 --lon 123.4506 --tz 8 --start 2025-04-28 --end 2025-08-08 --depth 10 --kd 0.21 --rating 80
 ```
 
 ```python
 from coralshading.design import design
-r = design(lat=10.4675, lon=123.4506, tz=8, start=(2025, 4, 28), end=(2025, 8, 8), kd=0.21)
+r = design(lat=10.4675, lon=123.4506, tz=8, start=(2025, 4, 28), end=(2025, 8, 8), depth=10, kd=0.21, cloth_rating=80)
 print(r.summary())
 r.to_csv("results/")     # points.csv (maps), days.csv, robustness.csv
 r.mc_check()             # 3-D Monte Carlo at the center and east and west edges, 3 h before noon, noon, 3 h after

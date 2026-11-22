@@ -1,17 +1,26 @@
 // Coral P–E model and daily light metrics. Port of python/src/coralshading/pe.py (definitions in its docstring).
 
-export type Acclimation = "none" | "site" | "shade";
-export interface Coral { ek: number; rOverPg?: number | null; ekEmax?: number | null; acclimate?: Acclimation; label?: string }
+export type Acclimation = "none" | "site" | "shade" | "time";
+export const ACCLIMATION_DAYS = 2.5;   // time constant, days (Anthony and Hoegh-Guldberg 2003: new stable Ik within 5-10 days)
+/** extent: how far Ek moves from "site" to the shade in "time" and "shade" (0-1; 1, the default, is full adjustment). */
+export interface Coral { ek: number; rOverPg?: number | null; ekEmax?: number | null; acclimate?: Acclimation; label?: string; extent?: number }
 
 export interface PresetFile {
   presets: { id: string; label: string; Ek: number; R_over_Pg?: number | null; Ek_Emax?: number | null }[];
 }
 
-export function coralFromPreset(P: PresetFile, id: string, acclimate: Acclimation = "none"): Coral {
+export function coralFromPreset(P: PresetFile, id: string, acclimate: Acclimation = "none", extent = 1): Coral {
   const p = P.presets.find((x) => x.id === id);
   if (!p) throw new Error(`unknown coral preset ${id}`);
-  return { ek: p.Ek, rOverPg: p.R_over_Pg ?? null, ekEmax: p.Ek_Emax ?? null, acclimate, label: p.label };
+  return { ek: p.Ek, rOverPg: p.R_over_Pg ?? null, ekEmax: p.Ek_Emax ?? null, acclimate, label: p.label, extent };
 }
+
+function extentOf(coral: Coral): number {
+  const x = coral.extent ?? 1;
+  if (!(x >= 0 && x <= 1)) throw new Error("the extent of acclimation must be between 0 and 1");
+  return x;
+}
+const siteEk = (coral: Coral, openDays: Float64Array[]) => Math.max(coral.ekEmax! * p90Peak(openDays.map((d) => Array.from(d, (v) => [v])), 0), 1.0);
 
 /** 90th percentile as numpy.percentile(..., 90) with linear interpolation. */
 function percentile(v: number[], q: number): number {
@@ -29,12 +38,42 @@ function p90Peak(days: ArrayLike<number>[][], p: number): number {
 export function effectiveEk(coral: Coral, days: Float64Array[][], nPoints: number, openDays?: Float64Array[]): Float64Array {
   const out = new Float64Array(nPoints).fill(coral.ek);
   const mode = coral.ekEmax ? (coral.acclimate ?? "none") : "none";
-  if (mode === "shade") for (let p = 0; p < nPoints; p++) out[p] = Math.max(coral.ekEmax! * p90Peak(days, p), 1.0);
+  const x = extentOf(coral);
+  if (mode === "shade") {
+    if (x < 1 && !openDays) throw new Error("site acclimation needs the open-water light");
+    const site = x < 1 ? siteEk(coral, openDays!) : 0;
+    for (let p = 0; p < nPoints; p++) {
+      const full = Math.max(coral.ekEmax! * p90Peak(days, p), 1.0);
+      out[p] = x >= 1 ? full : site + x * (full - site);
+    }
+  }
   if (mode === "site") {
     if (!openDays) throw new Error("site acclimation needs the open-water light");
-    out.fill(Math.max(coral.ekEmax! * p90Peak(openDays.map((d) => Array.from(d, (v) => [v])), 0), 1.0));
+    out.fill(siteEk(coral, openDays));
   }
   return out;
+}
+
+/** Ek per day and point. Static modes repeat effectiveEk; "time" starts acclimated to open water ("site") and moves each
+ *  day toward its target, exponentially with time constant ACCLIMATION_DAYS (as Python). The target is Ek/Emax x that
+ *  day's peak at the point, or with extent < 1 that share of the way from the "site" Ek to it. */
+export function effectiveEkByDay(coral: Coral, days: Float64Array[][], nPoints: number, openDays?: Float64Array[]): Float64Array[] {
+  const mode = coral.ekEmax ? (coral.acclimate ?? "none") : "none";
+  if (mode !== "time") { const e = effectiveEk(coral, days, nPoints, openDays); return days.map(() => e); }
+  if (!openDays) throw new Error("acclimation over time needs the open-water light");
+  const x = extentOf(coral), site = siteEk(coral, openDays);
+  const cur = new Float64Array(nPoints).fill(site);
+  const f = 1 - Math.exp(-1 / ACCLIMATION_DAYS);
+  return days.map((day) => {
+    const now = Float64Array.from(cur);
+    for (let p = 0; p < nPoints; p++) {
+      let pk = -Infinity; for (const row of day) pk = Math.max(pk, row[p]!);
+      let tgt = Math.max(coral.ekEmax! * pk, 1.0);
+      if (x < 1) tgt = site + x * (tgt - site);
+      cur[p] = cur[p]! + f * (tgt - cur[p]!);
+    }
+    return now;
+  });
 }
 
 export interface DayMetrics {

@@ -23,6 +23,13 @@ export interface HourlyLight {
   source: string;
   database: string;
   kind: "tmy" | "hourly";
+  centerMin?: number; // minute of the UTC hour on which every value is centred (default 30; e.g. 9 for PVGIS-SARAH3)
+  tmyYears?: number[] | null; // for a typical year built here: the year chosen for each calendar month
+}
+
+/** Minute of the UTC hour (0 <= m < 60) of a time in minutes since the epoch. */
+export function centerMinute(tUtcMin: number): number {
+  return tUtcMin - 60 * Math.floor(tUtcMin / 60);
 }
 
 export function civilFromDays(z0: number): [number, number, number] {
@@ -105,31 +112,124 @@ export function parsePVGIS(text: string): HourlyLight {
   const wind = col.has("WS10m") ? get("WS10m") : null;
   for (let i = 0; i < ghi.length; i++) { ghi[i] = Math.max(0, ghi[i]!); dhi[i] = Math.max(0, Math.min(dhi[i]!, ghi[i]!)); }
   const h: HourlyLight = { tUtc: t, ghi, dhi, unit: "W", wind, lat: lat ? parseFloat(lat) : null, lon: lon ? parseFloat(lon) : null,
-    source: "PVGIS 5.3", database, kind };
+    source: "PVGIS 5.3", database, kind, centerMin: centerMinute(t[0]!) };
   return kind === "tmy" ? tmyToReferenceYear(h) : h;
 }
 
 export function tmyToReferenceYear(h: HourlyLight): HourlyLight {
   const g = new Float64Array(8760), d = new Float64Array(8760), w = new Float64Array(8760).fill(NaN);
-  const base = daysFromCivil(REF_YEAR, 1, 1);
+  const base = daysFromCivil(REF_YEAR, 1, 1), cm = h.centerMin ?? 30;
   for (let i = 0; i < h.tUtc.length; i++) {
-    const c = h.tUtc[i]! - 30;
-    const [, mm, dd] = civilFromDays(Math.floor(c / 1440));
+    const hh = Math.round((h.tUtc[i]! - cm) / 60);   // whole UTC hours since the epoch
+    const [, mm, dd] = civilFromDays(Math.floor(hh / 24));
     if (mm === 2 && dd === 29) continue;
-    const k = (daysFromCivil(REF_YEAR, mm, dd) - base) * 24 + Math.floor((((c % 1440) + 1440) % 1440) / 60);
+    const k = (daysFromCivil(REF_YEAR, mm, dd) - base) * 24 + (((hh % 24) + 24) % 24);
     g[k] = h.ghi[i]!; d[k] = h.dhi[i]!;
     if (h.wind) w[k] = h.wind[i]!;
   }
-  const t = Float64Array.from({ length: 8760 }, (_, k) => base * 1440 + 30 + 60 * k);
-  return { ...h, tUtc: t, ghi: g, dhi: d, wind: h.wind ? w : null, kind: "tmy" };
+  const t = Float64Array.from({ length: 8760 }, (_, k) => base * 1440 + cm + 60 * k);
+  return { ...h, tUtc: t, ghi: g, dhi: d, wind: h.wind ? w : null, kind: "tmy", centerMin: cm };
 }
 
 export function lightFromJson(j: any): HourlyLight {
   const base = daysFromCivil(j.ref_year ?? REF_YEAR, 1, 1);
-  const n = j.ghi.length;
-  return { tUtc: Float64Array.from({ length: n }, (_, k) => base * 1440 + 30 + 60 * k), ghi: Float64Array.from(j.ghi),
+  const n = j.ghi.length, cm = j.center_min ?? 30;
+  return { tUtc: Float64Array.from({ length: n }, (_, k) => base * 1440 + cm + 60 * k), ghi: Float64Array.from(j.ghi),
     dhi: Float64Array.from(j.dhi), unit: j.unit, wind: j.wind ? Float64Array.from(j.wind, (v: number | null) => v ?? NaN) : null,
-    lat: j.lat ?? null, lon: j.lon ?? null, source: j.source ?? "", database: j.database ?? "", kind: j.kind };
+    lat: j.lat ?? null, lon: j.lon ?? null, source: j.source ?? "", database: j.database ?? "", kind: j.kind, centerMin: cm,
+    tmyYears: j.tmy_years ?? null };
+}
+
+// ------------------------------------------------------------------ Open-Meteo (ERA5) and typical years
+const WIND_TO_MS: Record<string, number> = { "m/s": 1, "km/h": 1 / 3.6, "mp/h": 0.44704, kn: 0.514444 };
+
+function isoToUtcMin(s: string): number {
+  return daysFromCivil(+s.slice(0, 4), +s.slice(5, 7), +s.slice(8, 10)) * 1440 + +s.slice(11, 13) * 60 + +s.slice(14, 16);
+}
+
+/** Read an Open-Meteo archive (ERA5) reply (as surface.parse_open_meteo in Python): hourly shortwave_radiation and
+ *  diffuse_radiation in W m-2, requested with timezone=GMT. Each value is the mean of the hour BEFORE its stamp. */
+export function parseOpenMeteo(data: string | any): HourlyLight {
+  const j = typeof data === "string" ? JSON.parse(data) : data;
+  if (j.error) throw new Error(`Open-Meteo: ${j.reason ?? "request refused"}`);
+  const h = j.hourly ?? {};
+  if (!h.time || !h.shortwave_radiation || !h.diffuse_radiation) throw new Error("Not an Open-Meteo hourly reply with shortwave_radiation and diffuse_radiation.");
+  if ((j.utc_offset_seconds ?? 0) !== 0) throw new Error("Open-Meteo data must be requested with timezone=GMT.");
+  let n: number = h.time.length;
+  while (n > 0 && (h.shortwave_radiation[n - 1] == null || h.diffuse_radiation[n - 1] == null)) n--;
+  if (n === 0) throw new Error("The Open-Meteo reply holds no radiation values.");
+  const ghi = new Float64Array(n), dhi = new Float64Array(n), t = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    const g = h.shortwave_radiation[i], d = h.diffuse_radiation[i];
+    if (g == null || d == null) throw new Error("The Open-Meteo reply has gaps in the radiation values.");
+    t[i] = isoToUtcMin(h.time[i]) - 30;
+    ghi[i] = Math.max(0, g); dhi[i] = Math.max(0, Math.min(d, ghi[i]!));
+  }
+  if (n > 1 && Math.round((t[n - 1]! - t[0]!) / 60) + 1 !== n) throw new Error("The Open-Meteo reply is not a gap-free hourly series.");
+  let wind: Float64Array | null = null;
+  if (h.wind_speed_10m) {
+    const f = WIND_TO_MS[(j.hourly_units ?? {}).wind_speed_10m ?? "km/h"] ?? 1 / 3.6;
+    wind = Float64Array.from({ length: n }, (_, i) => (h.wind_speed_10m[i] == null ? NaN : h.wind_speed_10m[i] * f));
+  }
+  return { tUtc: t, ghi, dhi, unit: "W", wind, lat: j.latitude ?? null, lon: j.longitude ?? null, source: "Open-Meteo archive API",
+    database: "ERA5 (Open-Meteo)", kind: "hourly", centerMin: centerMinute(t[0]!) };
+}
+
+/** A typical year from several years of hourly data (as surface.typical_year in Python): for each calendar month the
+ *  year whose daily global irradiation is distributed most like all years (Finkelstein-Schafer statistic; of the
+ *  `candidates` closest, the one with the monthly mean nearest the all-year mean). */
+export function typicalYear(h: HourlyLight, candidates = 3): HourlyLight {
+  if (h.kind !== "hourly") throw new Error("typical_year needs an hourly series of real years");
+  const cm = h.centerMin ?? 30, n = h.tUtc.length;
+  const h0 = Math.round((h.tUtc[0]! - cm) / 60);
+  for (let i = 0; i < n; i += 997) if (Math.round((h.tUtc[i]! - cm) / 60) !== h0 + i) throw new Error("typical_year needs a gap-free hourly series");
+  if (Math.round((h.tUtc[n - 1]! - cm) / 60) !== h0 + n - 1) throw new Error("typical_year needs a gap-free hourly series");
+  const yFirst = civilFromDays(Math.floor(h0 / 24))[0], yLast = civilFromDays(Math.floor((h0 + n - 1) / 24))[0];
+  const s0 = h.lon !== null ? (((-utcOffsetFromLon(h.lon)) % 24) + 24) % 24 : 0;   // UTC hour of local midnight
+  const blocks = new Map<string, [number, number]>();
+  let yMin = Infinity, yMax = -Infinity;
+  for (let y = yFirst; y <= yLast; y++) for (let m = 1; m <= 12; m++) {
+    const a = daysFromCivil(y, m, 1) * 24 - h0, b = daysFromCivil(m === 12 ? y + 1 : y, (m % 12) + 1, 1) * 24 - h0;
+    if (a >= 0 && b <= n) { blocks.set(`${m}|${y}`, [a, b]); yMin = Math.min(yMin, y); yMax = Math.max(yMax, y); }
+  }
+  const base = daysFromCivil(REF_YEAR, 1, 1);
+  const g = new Float64Array(8760), d = new Float64Array(8760), w = new Float64Array(8760).fill(NaN);
+  const chosen: number[] = [];
+  for (let m = 1; m <= 12; m++) {
+    const years: number[] = [];
+    for (let y = yFirst; y <= yLast; y++) if (blocks.has(`${m}|${y}`)) years.push(y);
+    if (!years.length) throw new Error(`typical_year: no complete month ${m} in the data`);
+    const daily = new Map<number, number[]>();
+    const all: number[] = [];
+    for (const y of years) {
+      const [a, b] = blocks.get(`${m}|${y}`)!;
+      const nd = Math.floor((b - a - s0) / 24), v: number[] = [];
+      for (let k = 0; k < nd; k++) { let sum = 0; for (let i = a + s0 + 24 * k; i < a + s0 + 24 * k + 24; i++) sum += h.ghi[i]!; v.push(sum); }
+      daily.set(y, v); all.push(...v);
+    }
+    all.sort((x, y) => x - y);
+    const meanAll = all.reduce((x, y) => x + y, 0) / all.length;
+    const upper = (x: number) => { let lo = 0, hi = all.length; while (lo < hi) { const mid = (lo + hi) >> 1; if (all[mid]! <= x) lo = mid + 1; else hi = mid; } return lo; };
+    const rank = years.map((y) => {
+      const v = [...daily.get(y)!].sort((x, z) => x - z), nv = v.length;
+      let fs = 0; for (let i = 0; i < nv; i++) fs += Math.abs(upper(v[i]!) / all.length - (i + 1) / nv);
+      return { fs: fs / nv, y, dev: Math.abs(v.reduce((x, z) => x + z, 0) / nv - meanAll) };
+    });
+    rank.sort((p, r) => p.fs - r.fs || p.y - r.y);
+    const best = rank.slice(0, Math.max(1, candidates)).sort((p, r) => p.dev - r.dev || p.fs - r.fs || p.y - r.y)[0]!;
+    chosen.push(best.y);
+    const [a, b] = blocks.get(`${m}|${best.y}`)!;
+    for (let i = a; i < b; i++) {
+      const hh = h0 + i;
+      const [, mm, dd] = civilFromDays(Math.floor(hh / 24));
+      if (mm === 2 && dd === 29) continue;
+      const k = (daysFromCivil(REF_YEAR, mm, dd) - base) * 24 + (((hh % 24) + 24) % 24);
+      g[k] = h.ghi[i]!; d[k] = h.dhi[i]!;
+      if (h.wind) w[k] = h.wind[i]!;
+    }
+  }
+  return { tUtc: Float64Array.from({ length: 8760 }, (_, k) => base * 1440 + cm + 60 * k), ghi: g, dhi: d, unit: h.unit, wind: h.wind ? w : null,
+    lat: h.lat, lon: h.lon, source: h.source, database: `${h.database} typical year ${yMin}-${yMax}`, kind: "tmy", centerMin: cm, tmyYears: chosen };
 }
 
 // ------------------------------------------------------------------ day series
@@ -138,20 +238,24 @@ export interface DayLight {
   parDirectH: Float64Array; parDiffuse: Float64Array; wind: Float64Array;
   lightTotal?: number; // light in the hourly data for this day (data units x minutes)
   lightDropped?: number; // part of it dropped by the timing guard
+  parCircumsolarH?: Float64Array; // circumsolar part of the diffuse PAR, from the sun's direction (Hay and Davies 1980);
+                                  // parDiffuse is then the isotropic rest
 }
 
 export function hourlyWindow(h: HourlyLight, y: number, m: number, d: number, tz: number) {
   const start = daysFromCivil(y, m, d) * 1440 - 60 * tz;
-  const first = Math.floor((start - 60) / 60) * 60 + 30;
+  const cm = h.centerMin ?? 30;   // hour centers at hh:cm (hh:30 for hour means)
+  const first = Math.floor((start - 60 - cm) / 60) * 60 + cm;
   const centers: number[] = [];
-  for (let c = first; c < start + 1440 + 60; c += 60) if (c + 30 > start && c - 30 < start + 1440) centers.push(c);
+  for (let j = 0; first + 60 * j < start + 1440 + 90; j++) { const c = first + 60 * j; if (c + 30 > start && c - 30 < start + 1440) centers.push(c); }
   const idx: number[] = [];
   if (h.kind === "tmy") {
     const base = daysFromCivil(REF_YEAR, 1, 1);
     for (const c of centers) {
-      let [, mm, dd] = civilFromDays(Math.floor((c - 30) / 1440));
+      const hh = Math.round((c - cm) / 60);   // whole UTC hours since the epoch
+      let [, mm, dd] = civilFromDays(Math.floor(hh / 24));
       if (mm === 2 && dd === 29) { mm = 2; dd = 28; }
-      idx.push((daysFromCivil(REF_YEAR, mm, dd) - base) * 24 + Math.floor(((((c - 30) % 1440) + 1440) % 1440) / 60));
+      idx.push((daysFromCivil(REF_YEAR, mm, dd) - base) * 24 + (((hh % 24) + 24) % 24));
     }
   } else {
     const t0 = h.tUtc[0]!;
@@ -164,51 +268,82 @@ export function hourlyWindow(h: HourlyLight, y: number, m: number, d: number, tz
   return { centers, ghi: idx.map((i) => h.ghi[i]!), dhi: idx.map((i) => h.dhi[i]!), wind: idx.map((i) => (h.wind ? h.wind[i]! : NaN)) };
 }
 
-export function dayLight(h: HourlyLight, y: number, m: number, d: number, lat: number, lon: number, tz: number, step = 10, noonShift = 0): DayLight {
+export function dayLight(h: HourlyLight, y: number, m: number, d: number, lat: number, lon: number, tz: number, step = 10, noonShift = 0,
+  circumsolar = true): DayLight {
   const { centers, ghi, dhi, wind } = hourlyWindow(h, y, m, d, tz);
   const day0 = daysFromCivil(y, m, d) * 1440 - 60 * tz;
   const N = 1440;
+  const cosAt = (minute: number) => Math.max(0, Math.cos((sunWithNoon(y, m, d, minute, lat, lon, tz, noonShift).zenithGeometric * Math.PI) / 180));
   const cz = new Float64Array(N);
-  for (let i = 0; i < N; i++) cz[i] = Math.max(0, Math.cos((sunWithNoon(y, m, d, i + 0.5, lat, lon, tz, noonShift).zenithGeometric * Math.PI) / 180));
-  const gF = new Float64Array(N), bF = new Float64Array(N), wF = new Float64Array(N).fill(NaN);
+  for (let i = 0; i < N; i++) cz[i] = cosAt(i + 0.5);
+  const gF = new Float64Array(N), bF = new Float64Array(N), wF = new Float64Array(N).fill(NaN), aF = new Float64Array(N);
   const doy = daysFromCivil(y, m, d) - daysFromCivil(y, 1, 1) + 1;
   const capUnit = h.unit === "W" ? 1 : PAR_FRACTION * Q_DIRECT; // W m-2 -> umol m-2 s-1 upper bound
+  const e0n = extraterrestrialHorizontal(doy, 1.0) * capUnit;
   let total = 0, dropped = 0;
-  for (let k = 0; k < centers.length; k++) {
-    const lo = centers[k]! - 30 - day0;
+  const nH = centers.length;
+  // per hour: cos(zenith) at its 60 minutes, their mean, the (capped) global and direct irradiance, the clearness
+  const lo = new Float64Array(nH), meanS = new Float64Array(nH), G = new Float64Array(nH), B = new Float64Array(nH);
+  const q = new Float64Array(nH), qb = new Float64Array(nH), i0s = new Int32Array(nH), i1s = new Int32Array(nH);
+  const czh: Float64Array[] = [], ok: boolean[] = [];
+  for (let k = 0; k < nH; k++) {
+    lo[k] = centers[k]! - 30 - day0;
+    const c = new Float64Array(60);
     let sumS = 0;
-    for (let j = 0; j < 60; j++) sumS += Math.max(0, Math.cos((sunWithNoon(y, m, d, lo + j + 0.5, lat, lon, tz, noonShift).zenithGeometric * Math.PI) / 180));
-    const meanS = sumS / 60;
-    const i0 = Math.max(0, Math.ceil(lo - 0.5)), i1 = Math.min(N, Math.ceil(lo + 60 - 0.5));
-    let G = ghi[k]!, D = dhi[k]!;
-    const inside = Math.max(0, i1 - i0);
-    total += G * inside;
-    const cap = KT_MAX * extraterrestrialHorizontal(doy, meanS) * capUnit;
-    if (G > cap) { dropped += (G - cap) * inside; D = G > 0 ? (D * cap) / G : 0; G = cap; } // data and sun disagree
-    for (let i = i0; i < i1; i++) {
-      if (meanS > 0) { gF[i] = (G * cz[i]!) / meanS; bF[i] = ((G - D) * cz[i]!) / meanS; }
-      wF[i] = wind[k]!;
+    for (let j = 0; j < 60; j++) { c[j] = cosAt(lo[k]! + j + 0.5); sumS += c[j]!; }
+    czh.push(c); meanS[k] = sumS / 60;
+    i0s[k] = Math.max(0, Math.ceil(lo[k]! - 0.5)); i1s[k] = Math.min(N, Math.ceil(lo[k]! + 60 - 0.5));
+    let g = ghi[k]!, dd = dhi[k]!;
+    const inside = Math.max(0, i1s[k]! - i0s[k]!);
+    total += g * inside;
+    const cap = KT_MAX * extraterrestrialHorizontal(doy, meanS[k]!) * capUnit;
+    if (g > cap) { dropped += (g - cap) * inside; dd = g > 0 ? (dd * cap) / g : 0; g = cap; } // data and sun disagree
+    G[k] = g; B[k] = g - dd;
+    ok.push(meanS[k]! > 0 && g > 0);   // hours with sun and light (PVGIS-ERA5 gives 0 for the hour of sunrise)
+    q[k] = ok[k] ? g / meanS[k]! : 0; qb[k] = ok[k] ? (g - dd) / meanS[k]! : 0;
+  }
+  /** Value at local minute t inside hour k: linear in time towards the neighbouring hour's centre (flat where it has no light). */
+  const interp = (vals: Float64Array, k: number, t: number): number => {
+    const dt = (t - (lo[k]! + 30)) / 60;   // -0.5 .. 0.5
+    if (dt < 0) return k > 0 && ok[k - 1] ? vals[k]! + -dt * (vals[k - 1]! - vals[k]!) : vals[k]!;
+    return k + 1 < nH && ok[k + 1] ? vals[k]! + dt * (vals[k + 1]! - vals[k]!) : vals[k]!;
+  };
+  for (let k = 0; k < nH; k++) {
+    for (let i = i0s[k]!; i < i1s[k]!; i++) wF[i] = wind[k]!;
+    if (!ok[k]) continue;
+    let sg = 0, sb = 0;
+    for (let j = 0; j < 60; j++) { const t = lo[k]! + j + 0.5; sg += interp(q, k, t) * czh[k]![j]!; sb += interp(qb, k, t) * czh[k]![j]!; }
+    const fg = sg > 0 ? (60 * G[k]!) / sg : 0, fb = sb > 0 ? (60 * B[k]!) / sb : 0;   // keep the hour's totals
+    for (let i = i0s[k]!; i < i1s[k]!; i++) {
+      const t = i + 0.5;
+      const gg = interp(q, k, t) * cz[i]! * fg;
+      const dni = interp(qb, k, t) * fb;   // direct normal irradiance at this minute
+      gF[i] = gg; bF[i] = Math.min(dni * cz[i]!, gg);
+      // Hay-Davies anisotropy index: DNI over the extraterrestrial normal irradiance (0..1)
+      if (circumsolar) aF[i] = e0n > 0 ? Math.min(Math.max(dni / e0n, 0), 1) : 0;
     }
   }
   const n = Math.round(1440 / step), per = N / n;
   const mins = new Float64Array(n), zen = new Float64Array(n), az = new Float64Array(n);
-  const pb = new Float64Array(n), pd = new Float64Array(n), ws = new Float64Array(n);
+  const pb = new Float64Array(n), pd = new Float64Array(n), pc = new Float64Array(n), ws = new Float64Array(n);
   for (let s = 0; s < n; s++) {
-    let sb = 0, sd = 0, sw = 0, cw = 0;
+    let sb = 0, sd = 0, sc = 0, sw = 0, cw = 0;
     for (let j = 0; j < per; j++) {
       const i = s * per + j;
       let b: number, dd: number;
       if (h.unit === "W") [b, dd] = toPar(gF[i]!, gF[i]! - bF[i]!);
       else { b = bF[i]!; dd = gF[i]! - bF[i]!; }
-      sb += b; sd += dd;
+      const c = aF[i]! * dd;
+      sb += b; sd += dd - c; sc += c;
       if (!Number.isNaN(wF[i]!)) { sw += wF[i]!; cw++; }
     }
-    pb[s] = sb / per; pd[s] = sd / per; ws[s] = cw ? sw / cw : NaN;
+    pb[s] = sb / per; pd[s] = sd / per; pc[s] = sc / per; ws[s] = cw ? sw / cw : NaN;
     mins[s] = (s + 0.5) * step;
     const sp = sunWithNoon(y, m, d, mins[s]!, lat, lon, tz, noonShift);
     zen[s] = sp.zenith; az[s] = sp.azimuth;
   }
-  return { minutes: mins, step, zenith: zen, azimuth: az, parDirectH: pb, parDiffuse: pd, wind: ws, lightTotal: total, lightDropped: dropped };
+  return { minutes: mins, step, zenith: zen, azimuth: az, parDirectH: pb, parDiffuse: pd, wind: ws, lightTotal: total, lightDropped: dropped,
+    parCircumsolarH: pc };
 }
 
 /** Extraterrestrial irradiance on a horizontal plane (W m-2). */

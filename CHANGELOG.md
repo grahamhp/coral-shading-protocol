@@ -1,5 +1,134 @@
 # Changelog
 
+## 5.2.0 (app published 22 Nov 2026; release tag and DOI to follow)
+
+Made ready to show at Reef Futures 2026. Includes everything in 5.1.0 below.
+
+**Light data**
+
+- **Fixed: PVGIS satellite data were placed 39 minutes early.** PVGIS-SARAH3 values (Europe, Africa, the Red Sea,
+  the western Indian Ocean) are for a few minutes past the hour; every value was put on the half hour, which
+  skewed the day and dropped light near sunset, and SARAH-3 hourly series were refused. Each value now keeps its
+  own time. ERA5-based sites, including the example, were not affected.
+- **Smooth light within the day.** The hour's clearness is interpolated between neighbouring hours instead of
+  being held constant, so the curve no longer jumps at each hour boundary. Every hour keeps its total; designs
+  move by hundredths of a centimeter.
+- **Weather for any site.** The app fetches ten years of hourly ERA5 data from Open-Meteo for a new site and
+  builds a typical year (one real year per calendar month, chosen by the Finkelstein–Schafer statistic). The same
+  data PVGIS uses outside its satellite area; checked against PVGIS at six sites. PVGIS files stay the reference.
+  Python: `design(light="era5")`, CLI `--light era5`.
+- **Ten example reefs** with PVGIS typical years are bundled and work offline.
+
+**App**
+
+- **Simple mode** asks five questions in plain words; typical values fill the rest. **Expert mode** adds every
+  variable and four more views (coral response, month by month, other conditions, other canopy widths).
+- **The plan at a glance**: what to build and what the corals get under each kind of shading and with no shade.
+- **How much shade?** The same cloth at 30, 50, 70, 80 and 90 %: light, daily light, photosynthesis, energy
+  balance and time above saturation, with the published trials named. Choosing a row uses that rating.
+- **Coral numbers for the first days** (before the corals adjust to the shade) beside the adjusted ones.
+- **How far the corals adjust to the shade is a setting**, and it starts low. None, Low (25 % of the way, the
+  start), Medium, Full; any value in Expert mode. Full is what 5.1 assumed. Low is a cautious assumption, not a
+  measurement, so that a plan does not rely on the corals making up for heavy shade. Python:
+  `design(acclimation_extent=0.25)`; CLI `--acclimation-extent`.
+- **New starting point: a 50 % shade cloth and corals at 5 m** (was 80 % and 10 m), in the app, `design()` and the
+  command line. A canopy designed on its own starts at 50 % less light (was 75 %). **This changes the output of
+  `design()` and the command line when depth, rating or acclimation are left out**; name them to reproduce
+  earlier results (`depth=10, cloth_rating=80, acclimation_extent=1`).
+- **Through the day**: average day, clearest day, cloudiest day or any date; values under the pointer.
+- New check when the ERA5 route is used inside PVGIS's satellite area; exports add photosynthesis and P:R per day
+  and the sun-beam share.
+- Works in a frame without a scrollbar of its own (the app reports its height), and on phones.
+
+**Validation**
+
+- Engine against the 3-D Monte Carlo on five days through the deployment, five times a day: mean +0.005 of
+  open-water light on every day (docs/validation.md, section 4).
+- Light-data timing and the Open-Meteo comparison (section 5).
+
+**Robustness**
+
+- **Runs where a background worker is refused.** Some windows block the worker the app computes in (a sandboxed
+  file preview, for example), which left the page on "Computing...". The page now runs the same calculation stages
+  itself in that case, with identical results; it may pause briefly while it works.
+
+## 5.1.0 (not yet released)
+
+From a scientific review of v5.0.0 (19 Nov 2026). Designs are unchanged except where noted.
+
+**Water scattering (ω₀), for any site**
+
+- **Default ω₀ 0.7 with a range on every result.** v5.0 defaulted to 0.9, fitted to one site's canopy readings.
+  ω₀ is rarely measured and published values span most of its range (Petzold's waters 0.25–0.83; 0.1–0.9 from
+  absorption- to scattering-dominated water), so the design value is now 0.7, the middle of 0.5–0.9, and every
+  result is also computed at both ends with the same structure ("likely between … and …"). This changes designs:
+  with less scattering the shade is darker, so a canopy matched to a cloth is narrower and the light reaching the
+  corals is lower than at 0.9.
+- **ω₀ from a field reading.** The ratio of light under an opaque board to open water at the same depth, with
+  the board size and height, date, time and diffuse share, gives the ω₀ that reproduces it (bisection; the ratio
+  rises monotonically with ω₀), and its uncertainty gives the range. App: Expert → Water scattering from a field
+  reading. Python: `scenarios.w0_from_reading`; CLI `--w0-reading`, `--reading-time`, `--reading-diffuse`,
+  `--reading-err`. Field protocol section 1b.
+- **Light tables extended to ω₀ 0.3, 0.4 and 0.95** (same Monte Carlo settings), so readings from clearer or
+  more strongly scattering water can be fitted. The v5.0 entries are unchanged to the last digit. The engine was
+  checked against the 3-D Monte Carlo at the new values (54 more points; all 180 points now average +0.006 of
+  open-water light), and Kd round trips at the new values are tested.
+- A reading outside what any tabulated ω₀ can give is reported and not used (app and CLI); v5.1's first draft
+  clipped it to the nearest bound.
+- **Water presets** are published reef values only (clear 0.06, moderate 0.10, turbid inshore 0.45 m⁻¹); the
+  example site's own Kd is no longer a preset. Help texts no longer rely on one site.
+
+**Conditions that change through a deployment**
+
+- **Kd by date** (own readings or satellite products), interpolated day by day.
+- **Tide**: a water-level series sets the coral depth at every 10-minute step; the depth entered is the depth at
+  mean water level. A structure that reaches the surface at low tide is handled exactly.
+- **Cloth fouling over time** replaces the fixed share of time fouled in the app: transmission falls linearly from
+  clean to fully fouled over a set number of days after each cleaning (start date, every n days, extra dates).
+  Exact and no slower (light is linear in one panel's transmission). Python keeps the fixed share as well.
+- **Coral acclimation over time** (new default): Ek starts adjusted to open water at the coral depth and moves
+  each day toward the light under the structure with a 2.5-day time constant (Anthony & Hoegh-Guldberg 2003: new
+  stable Ek within 5–10 days).
+- Exports add `kd_m1`, `depth_at_noon_m` (with a tide) and `cloth_transmission` (with fouling) per day.
+
+**Sky light**
+
+- **Circumsolar light.** Part of the diffuse light now travels with the sun, by the hourly anisotropy index of
+  Hay & Davies (1980). In the example (Kd 0.10, ω₀ 0.7, 10 m) open-water daily light rises 1.3 %, light under the
+  80 % cloth falls from 25.4 to 25.0 % of open water, and the matching canopy is 2 cm narrower.
+
+**App**
+
+- Fixed a slowdown: after a few design runs V8 deoptimized the inner light loops (objects of several shapes reached
+  them) and the robustness stage took about 30 s instead of 3 s. Panels are now copied into one fixed shape first.
+- `npm test` runs the same command as CI.
+
+- **Every day, everywhere.** The canopy solver and the robustness table use every day of the deployment (v5.0
+  used about 20 and 12 days). The canopy is solved on the reported grid, so the separate correction step is gone.
+  At Sipaway the canopy width changes by 1.6 mm and the robustness values by at most 0.08 percentage points. Cost:
+  the full Python design takes about 3 minutes instead of 1; in the app the full result takes about 5 s and the
+  robustness table about 4 s more. The app's quick preview still uses every tenth day and says so.
+- **Clearance rule on the most demanding day.** The canopy height that lets the morning sun reach the whole coral
+  area is now computed for every day and the largest is shown, with its date (Sipaway: 2.74 m around the June
+  solstice; v5.0 showed 2.56 m for the first day).
+- **Light at noon and in the morning and afternoon** for each design, and the share of the light at depth that
+  arrives as the sun beam. A CHECK appears when dynamic shading's noon light is more than 0.8 of its morning and
+  afternoon light. At Sipaway (Kd 0.21, 10 m, ω₀ 0.9) the beam carries 0.7 % of the light and the canopy designed
+  to match an 80 % cloth gives 32 % of open-water light at noon and 36 % in the morning and afternoon, against the
+  cloth's 33 % and 35 %: dynamic shading barely differs from constant shading there.
+- **"Direct sun" renamed "sun in line".** These hours are geometry only (clouds and scattering are not counted).
+  CSV columns `*_direct_sun_h` are now `*_sun_in_line_h`.
+- **Assumptions stated on daily values.** Exports (app and Python) start with a line giving the version, site,
+  dates, light data and the assumptions: one Kd on every day, a fixed depth (no tide), and, for the typical year,
+  that each date is one typical-year day, not that year's weather. `days.csv` has a `weather` column. The app's
+  day view says the same.
+- Python: `DesignResult.beam_share`, `ScenarioResult.contrast`, `scenarios.noon_contrast`, `contrast_warning`,
+  `PeriodResult.beam_share()`; `clearance_check` returns `h_rule_day`; `solve_dynamic` and `robustness` default
+  to every day. TypeScript: the same (`beamShare`, `noonContrast`, `contrastWarning`, `hRuleDay`). Golden values
+  extended; both test suites check them to 10⁻⁹.
+- `python/examples/methods_paper_analyses.py` is unchanged and still solves on every tenth day; it reproduces the
+  methods-paper groundwork figures as made.
+
 ## 5.0.0 (2026-11-13)
 
 Rebuilt on radiative transfer. Compared with v4.2:

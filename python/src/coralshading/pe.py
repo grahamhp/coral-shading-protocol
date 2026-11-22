@@ -22,7 +22,19 @@ compiled curves of Sawall & Hochberg 2018 have Ek/Emax 0.14-0.52). Modes:
            Ek = (Ek/Emax of the source) x peak open-water irradiance at the target depth (default);
 - "shade": corals fully acclimated to the light at their own position under the structure:
            Ek = (Ek/Emax of the source) x the point's own peak irradiance.
-The peak is the 90th percentile of daily peaks when several days are given. Presets without Ek/Emax use "none".
+- "time" (v5.1): corals start acclimated to open water ("site") and adjust each day toward (Ek/Emax) x that day's
+           peak irradiance at their own position, exponentially with a time constant of ACCLIMATION_DAYS. Anthony and
+           Hoegh-Guldberg (2003) found that Ik changed exponentially after shifts in growth light and reached new
+           stable levels within 5-10 days (Turbinaria mesenterina); a time constant of 2.5 days puts 95 % of the change
+           within 7.5 days. Day k uses the Ek reached after the light of days 0..k-1.
+The peak is the 90th percentile of daily peaks when several days are given ("site", "shade"). Presets without Ek/Emax
+use "none".
+
+How far the corals adjust (v5.2): extent, 0 to 1. In "time" and "shade" the Ek the corals move to is
+    Ek_site + extent x (Ek matched to the shade - Ek_site),
+so 1 is full adjustment (the modes as described above), 0 leaves the corals as in "site", and values between are a
+partial adjustment. The published observations are of full adjustment in corals that were not heat-stressed; a low
+extent is a cautious design assumption, not a measured value.
 """
 from __future__ import annotations
 
@@ -45,14 +57,16 @@ class Coral:
     ek: float                          # umol photons m-2 s-1
     r_over_pg: float | None = None     # dark respiration / Pmax (gross)
     ek_emax: float | None = None       # Ek / peak irradiance of the source colonies (for photoacclimation)
-    acclimate: str = "none"            # "none" | "site" | "shade"
+    acclimate: str = "none"            # "none" | "site" | "shade" | "time"
     label: str = "custom"
+    extent: float = 1.0                # how far Ek moves from "site" to the shade in "time" and "shade" (0-1)
 
     @classmethod
-    def preset(cls, pid: str, acclimate: str = "none", presets: dict | None = None) -> "Coral":
+    def preset(cls, pid: str, acclimate: str = "none", presets: dict | None = None, extent: float = 1.0) -> "Coral":
         P = presets or load_presets()
         p = next(x for x in P["presets"] if x["id"] == pid)
-        return cls(ek=float(p["Ek"]), r_over_pg=p.get("R_over_Pg"), ek_emax=p.get("Ek_Emax"), acclimate=acclimate, label=p["label"])
+        return cls(ek=float(p["Ek"]), r_over_pg=p.get("R_over_Pg"), ek_emax=p.get("Ek_Emax"), acclimate=acclimate, label=p["label"],
+                   extent=extent)
 
 
 def _p90_peak(days3: np.ndarray) -> np.ndarray:
@@ -61,18 +75,40 @@ def _p90_peak(days3: np.ndarray) -> np.ndarray:
     return np.percentile(peaks, 90, axis=0) if peaks.shape[0] > 1 else peaks[0]
 
 
+ACCLIMATION_DAYS = 2.5
+
+
 def effective_ek(coral: Coral, ed_days: np.ndarray, ed_open_days: np.ndarray | None = None) -> np.ndarray:
-    """Ek per point. ed_days: [day, time, point] (or [time, point]); ed_open_days: [day, time] (or [time])."""
+    """Ek per point ([point]), or per day and point ([day, point]) for acclimation over time.
+    ed_days: [day, time, point] (or [time, point]); ed_open_days: [day, time] (or [time])."""
     e = ed_days if ed_days.ndim == 3 else ed_days[None]
     npnt = e.shape[2]
     mode = coral.acclimate if coral.ek_emax else "none"
-    if mode == "shade":
-        return np.maximum(coral.ek_emax * _p90_peak(e), 1.0)
-    if mode == "site":
+    x = float(coral.extent)
+    if not 0.0 <= x <= 1.0:
+        raise ValueError("the extent of acclimation must be between 0 and 1")
+    site = None
+    if mode == "site" or mode == "time" or (mode == "shade" and x < 1.0):
         if ed_open_days is None:
-            raise ValueError("site acclimation needs the open-water light")
+            raise ValueError("acclimation over time needs the open-water light" if mode == "time" else "site acclimation needs the open-water light")
         o = np.asarray(ed_open_days, float); o = o if o.ndim == 2 else o[None]
-        return np.full(npnt, max(coral.ek_emax * float(_p90_peak(o[:, :, None])[0]), 1.0))
+        site = max(coral.ek_emax * float(_p90_peak(o[:, :, None])[0]), 1.0)
+    if mode == "time":
+        cur = np.full(npnt, site)
+        f = 1.0 - math.exp(-1.0 / ACCLIMATION_DAYS)
+        out = np.empty((e.shape[0], npnt))
+        for k in range(e.shape[0]):
+            out[k] = cur
+            tgt = np.maximum(coral.ek_emax * e[k].max(axis=0), 1.0)
+            if x < 1.0:
+                tgt = site + x * (tgt - site)
+            cur = cur + f * (tgt - cur)
+        return out
+    if mode == "shade":
+        full = np.maximum(coral.ek_emax * _p90_peak(e), 1.0)
+        return full if x >= 1.0 else site + x * (full - site)
+    if mode == "site":
+        return np.full(npnt, site)
     return np.full(npnt, coral.ek)
 
 

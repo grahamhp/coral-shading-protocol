@@ -45,7 +45,9 @@ const app = bundle(resolve(SRC, "ui", "app.ts"));
 const boot = {
   tables: JSON.parse(read(resolve(SHARED, "tables", "light_tables.json"))),
   presets: JSON.parse(read(resolve(SHARED, "corals", "pe_presets.json"))),
-  example: JSON.parse(read(resolve(SHARED, "examples", "sipaway.json"))),
+  // example reefs, Sipaway first (ids as in python/src/coralshading/examples.py)
+  examples: ["sipaway", "florida_keys", "belize", "bonaire", "eilat", "mombasa", "maldives", "lizard_island", "kaneohe", "moorea"]
+    .map((id) => JSON.parse(read(resolve(SHARED, "examples", `${id}.json`)))),
   references: JSON.parse(read(resolve(SHARED, "references.json"))),
   workerSource: worker,
 };
@@ -56,7 +58,7 @@ const css = font + "\n" + leafletCss + "\n" + read(resolve(SRC, "ui", "styles.cs
 const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Coral Shading Protocol v${pkg.version}</title>
-<meta name="description" content="Design shade cloths and canopies for coral restoration: light under the structure, day by day, from PVGIS sunlight data.">
+<meta name="description" content="Plan coral shading for heat stress: size a shade cloth or a midday canopy for your reef and see the light your corals receive, day by day.">
 <style id="css">${css}</style>
 </head><body><noscript>This app needs JavaScript.</noscript>
 <script>${read(resolve(NM, "leaflet", "dist", "leaflet.js"))}</script>

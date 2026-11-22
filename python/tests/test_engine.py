@@ -18,7 +18,8 @@ def _open_ratio(w, st):
 
 
 @pytest.mark.parametrize("kd,w0,depth", [(0.05, 0.7, 10), (0.10, 0.7, 10), (0.21, 0.5, 10), (0.21, 0.9, 10),
-                                         (0.40, 0.7, 15), (0.60, 0.8, 20)])
+                                         (0.40, 0.7, 15), (0.60, 0.8, 20),
+                                         (0.21, 0.3, 10), (0.21, 0.4, 10), (0.21, 0.95, 10), (0.06, 0.95, 10), (0.40, 0.3, 15), (0.40, 0.95, 15)])
 def test_kd_round_trip(kd, w0, depth):
     w = engine.Water(kd=kd, w0=w0, depth=depth)
     assert _open_ratio(w, engine.optical_state(w)) == pytest.approx(math.exp(-kd * depth), rel=0.01)

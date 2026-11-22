@@ -61,8 +61,9 @@ function interpWT(t: Tables, w0: number, tau: number, value: (iw: number, it: nu
   return (1 - fw) * lo + fw * hi;
 }
 
-export function opticalState(water: Water, t: Tables): OpticalState {
-  const tau = opticalDepthForKd(water, t);
+/** Tables interpolated to one water column; tau (= c z) from water.kd and water.depth unless given (v5.1). */
+export function opticalState(water: Water, t: Tables, tauGiven?: number): OpticalState {
+  const tau = tauGiven ?? opticalDepthForKd(water, t);
   const nz = t.sun_zeniths.length, nT = t.theta_edges_deg.length - 1, M = t.m_max;
   const beam = new Float64Array(nz), tot = new Float64Array(nz);
   const sunA: Float64Array[][] = [];
@@ -90,6 +91,11 @@ export interface Moments { C: Float64Array[]; S: Float64Array[]; nPoints: number
 /** Azimuth integrals of the panels' transmission seen from each point (see Python panel_moments).
  * Loops run direction-major: for submerged panels the hit offset of a direction does not depend on the point,
  * so it is computed once and reused for every point (same arithmetic as the reference: x + (h*ux)/uz). */
+/** A panel copied into one fixed object shape, so the hot loops below see a single hidden class whatever
+ *  object the caller built (spread copies, solver output, parsed inputs). Without it V8 deoptimizes the loops
+ *  repeatedly and falls back to slow code after a few design runs. */
+const flatPanel = (p: Panel): Panel => ({ cx: +p.cx, cy: +p.cy, lx: +p.lx, ly: +p.ly, height: +p.height, tau: +p.tau, rotDeg: +(p.rotDeg ?? 0) });
+
 export function panelMoments(pts: Float64Array, panels: readonly Panel[], water: Water, thetaEdges: Float64Array, mMax = 4): Moments {
   const nP = pts.length / 2, nT = thetaEdges.length - 1;
   const C: Float64Array[] = [], S: Float64Array[] = [];
@@ -98,7 +104,8 @@ export function panelMoments(pts: Float64Array, panels: readonly Panel[], water:
   const phis = Float64Array.from({ length: N_PHI }, (_, j) => (j + 0.5) * dphi);
   const cosm: Float64Array[] = [], sinm: Float64Array[] = [];
   for (let m = 0; m <= mMax; m++) { cosm.push(phis.map((p) => Math.cos(m * p))); sinm.push(phis.map((p) => Math.sin(m * p))); }
-  const pc = panels.map((p) => ({ p, cr: Math.cos((p.rotDeg * Math.PI) / 180), sr: Math.sin((p.rotDeg * Math.PI) / 180), sub: p.height <= water.depth }));
+  const depth0 = +water.depth;
+  const pc = panels.map(flatPanel).map((p) => ({ p, cr: Math.cos((p.rotDeg * Math.PI) / 180), sr: Math.sin((p.rotDeg * Math.PI) / 180), sub: p.height <= depth0 }));
   const tr = new Float64Array(nP * N_PHI);
   for (let i = 0; i < nT; i++) {
     tr.fill(0);
@@ -128,7 +135,7 @@ export function panelMoments(pts: Float64Array, panels: readonly Panel[], water:
             const { p: pan, cr, sr, sub } = pc[q]!;
             let hx: number, hy: number, ok = true;
             if (sub) { hx = px + (pan.height * ux) / uz; hy = py + (pan.height * uy) / uz; }
-            else [hx, hy, ok] = rayHitXY(px, py, ux, uy, ct, pan.height, water.depth);
+            else [hx, hy, ok] = rayHitXY(px, py, ux, uy, ct, pan.height, depth0);
             if (!ok) continue;
             const dx = hx - pan.cx, dy = hy - pan.cy;
             const u = dx * cr - dy * sr, w = dx * sr + dy * cr;
@@ -152,7 +159,8 @@ export function panelMoments(pts: Float64Array, panels: readonly Panel[], water:
   return { C, S, nPoints: nP, nTheta: nT };
 }
 
-export interface DayResult { minutes: Float64Array; step: number; ed: Float64Array[]; edOpen: Float64Array; sunlit: Float64Array[] }
+export interface DayResult { minutes: Float64Array; step: number; ed: Float64Array[]; edOpen: Float64Array; sunlit: Float64Array[];
+  beamOpen: Float64Array }   // beamOpen: sun-beam part of the open-water light (within 3 deg of the refracted sun)
 
 /** Panel moments pre-reduced against the tabulated sun angles: D[j][m][p] = sum_i A_m^(j)[i] C_m[p,i] (and E with S).
  * Exact, because the engine interpolates A linearly in sun zenith; it turns the per-step broad sum from
@@ -182,29 +190,54 @@ function reduce(st: OpticalState, mom: Moments): Reduced {
   return r;
 }
 
-export function runDay(day: DayLight, water: Water, panels: readonly Panel[], pts: Float64Array, st: OpticalState, mom: Moments, nFacets = 64): DayResult {
-  const nt = day.minutes.length, nP = pts.length / 2, nT = mom.nTheta;
-  const ed: Float64Array[] = [], sunlit: Float64Array[] = [];
-  const edOpen = new Float64Array(nt);
-  const Tsky = skyTransmittance();
-  const red = reduce(st, mom);
+export interface StepConditions {
+  states: OpticalState[];                 // one per time step (tide, Kd by date)
+  depths?: Float64Array;                  // coral depth per step (m), when the water level changes
+  momentsAt?: (depth: number) => Moments; // panel moments for a depth, when a panel can reach the surface
+}
+
+/** Per-state quantities used at every step (cached per optical state and moments). */
+interface Derived { red: Reduced; skyOpen: number; lb: Float64Array; a0: Float64Array }
+const derivedCache = new WeakMap<Moments, WeakMap<OpticalState, Derived>>();
+function derive(st: OpticalState, mom: Moments): Derived {
+  let byState = derivedCache.get(mom);
+  if (!byState) { byState = new WeakMap(); derivedCache.set(mom, byState); }
+  const hit = byState.get(st);
+  if (hit) return hit;
+  const nT = mom.nTheta, nz = st.sunZeniths.length;
   let skyOpen = 0; for (let i = 0; i < nT; i++) skyOpen += st.skyA0[i]!;
-  const Z = st.sunZeniths, nz = Z.length;
   const lb = Float64Array.from(st.beam, (b) => lg(b));
   const a0 = Float64Array.from({ length: nz }, (_, j) => { let s = 0; const A = st.sunA[j]![0]!; for (let i = 0; i < nT; i++) s += A[i]!; return s; });
+  const r = { red: reduce(st, mom), skyOpen, lb, a0 };
+  byState.set(st, r);
+  return r;
+}
+
+export function runDay(day: DayLight, water: Water, panels: readonly Panel[], pts: Float64Array, st: OpticalState, mom: Moments, nFacets = 64,
+  cond?: StepConditions): DayResult {
+  const nt = day.minutes.length, nP = pts.length / 2;
+  const ed: Float64Array[] = [], sunlit: Float64Array[] = [];
+  const edOpen = new Float64Array(nt), beamOpen = new Float64Array(nt);
+  const Tsky = skyTransmittance();
+  const Z = st.sunZeniths, nz = Z.length;
   const M = st.mMax;
+  const circ = day.parCircumsolarH ?? null;
+  const zen = day.zenith, azi = day.azimuth, pDir = day.parDirectH, pDif = day.parDiffuse, wnd = day.wind, depth0 = +water.depth;
   // per-panel constants for the inlined ray test
-  const pn = panels.map((p) => ({ p, cr: Math.cos((p.rotDeg * Math.PI) / 180), sr: Math.sin((p.rotDeg * Math.PI) / 180) }));
+  const pn = panels.map(flatPanel).map((p) => ({ p, cr: Math.cos((p.rotDeg * Math.PI) / 180), sr: Math.sin((p.rotDeg * Math.PI) / 180) }));
   for (let k = 0; k < nt; k++) {
     const e = new Float64Array(nP), v = new Float64Array(nP);
     ed.push(e); sunlit.push(v);
-    if (!(day.zenith[k]! < 90)) continue;
-    const wind = Number.isFinite(day.wind[k]!) ? day.wind[k]! : 0;
-    const rays = refractedSunRays(day.zenith[k]!, day.azimuth[k]!, wind, nFacets);
-    const Fs = day.parDirectH[k]! * rays.transmittance, Fk = day.parDiffuse[k]! * Tsky;
-    const sa = (day.azimuth[k]! * Math.PI) / 180, za = (Math.min(day.zenith[k]!, 89.9) * Math.PI) / 180;
+    if (!(zen[k]! < 90)) continue;
+    const depthK = cond?.depths ? cond.depths[k]! : depth0;
+    const momK = cond?.momentsAt ? cond.momentsAt(depthK) : mom;
+    const { red, skyOpen, lb, a0 } = derive(cond ? cond.states[k]! : st, momK);
+    const wind = Number.isFinite(wnd[k]!) ? wnd[k]! : 0;
+    const rays = refractedSunRays(zen[k]!, azi[k]!, wind, nFacets);
+    const Fs = (pDir[k]! + (circ ? circ[k]! : 0)) * rays.transmittance, Fk = pDif[k]! * Tsky;
+    const sa = (azi[k]! * Math.PI) / 180, za = (Math.min(zen[k]!, 89.9) * Math.PI) / 180;
     const air = [Math.sin(za) * Math.sin(sa), Math.sin(za) * Math.cos(sa), Math.cos(za)] as const;
-    const z = Math.min(Math.max(day.zenith[k]!, Z[0]!), Z[nz - 1]!);
+    const z = Math.min(Math.max(zen[k]!, Z[0]!), Z[nz - 1]!);
     const [j, f] = bracket(Z, z);
     const beam = Math.exp((1 - f) * lb[j]! + f * lb[j + 1]!);
     // broad = sum_m cos(m sa) [(1-f) D_j + f D_j+1] + sin(m sa) [(1-f) E_j + f E_j+1]
@@ -222,8 +255,8 @@ export function runDay(day: DayLight, water: Water, panels: readonly Panel[], pt
         if (!(rays.weights[q]! > 0)) continue;
         const ux = rays.dirs[3 * q]!, uy = rays.dirs[3 * q + 1]!, uz = Math.max(rays.dirs[3 * q + 2]!, 1e-12);
         let hx: number, hy: number, good = true;
-        if (pan.height <= water.depth) { hx = (pan.height * ux) / uz; hy = (pan.height * uy) / uz; }
-        else [hx, hy, good] = rayHitXY(0, 0, ux, uy, uz, pan.height, water.depth, air);
+        if (pan.height <= depthK) { hx = (pan.height * ux) / uz; hy = (pan.height * uy) / uz; }
+        else [hx, hy, good] = rayHitXY(0, 0, ux, uy, uz, pan.height, depthK, air);
         ox[q] = hx; oy[q] = hy; ok[q] = good ? 1 : 0;
         if (!good) { allOk = false; continue; }
         x0 = Math.min(x0, hx); x1 = Math.max(x1, hx); y0 = Math.min(y0, hy); y1 = Math.max(y1, hy);
@@ -272,6 +305,7 @@ export function runDay(day: DayLight, water: Water, panels: readonly Panel[], pt
     }
     const a0k = (1 - f) * a0[j]! + f * a0[j + 1]!;
     edOpen[k] = Fs * (beam + 2 * Math.PI * a0k) + Fk * 2 * Math.PI * skyOpen;
+    beamOpen[k] = Fs * beam;
   }
-  return { minutes: day.minutes, step: day.step, ed, edOpen, sunlit };
+  return { minutes: day.minutes, step: day.step, ed, edOpen, sunlit, beamOpen };
 }

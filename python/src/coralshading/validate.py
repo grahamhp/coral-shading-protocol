@@ -30,7 +30,8 @@ SUNS = {"noon": (9.8, 0.0), "low_east": (50.0, 80.0), "mid_west": (35.0, 260.0)}
 def cases():
     out = []
     for w in [dict(kd=0.21, w0=0.7, depth=10.0), dict(kd=0.21, w0=0.85, depth=10.0), dict(kd=0.21, w0=0.5, depth=10.0),
-              dict(kd=0.06, w0=0.7, depth=10.0), dict(kd=0.40, w0=0.7, depth=5.0)]:
+              dict(kd=0.06, w0=0.7, depth=10.0), dict(kd=0.40, w0=0.7, depth=5.0),
+              dict(kd=0.21, w0=0.3, depth=10.0), dict(kd=0.21, w0=0.4, depth=10.0), dict(kd=0.21, w0=0.95, depth=10.0)]:   # v5.1: table ends
         for sun_name, (sz, sa) in SUNS.items():
             for pname, pan in [("canopy0.75", CANOPY), ("cloth0.75", CLOTH), ("canopy2.0", dict(CANOPY, height=2.0))]:
                 if (w["kd"], w["w0"]) != (0.21, 0.7) and pname != "canopy0.75":

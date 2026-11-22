@@ -1,6 +1,6 @@
 {
  "version": 1,
- "note": "Every DOI was resolved on CrossRef and matched by title and year on the date given.",
+ "note": "Every DOI was resolved on CrossRef and matched by title and year on the date given; entries added on 2026-11-22 were checked on publisher or index pages instead (see 'checked').",
  "references": {
   "McCree1972": {
    "doi": "10.1016/0002-1571(72)90045-3",
@@ -434,6 +434,133 @@
    ],
    "journal": "Sandia National Laboratories report SAND2012-2389",
    "checked": "2026-11-09 (CrossRef)"
+  },
+  "HayDavies1980": {
+   "doi": null,
+   "title": "Calculation of the solar radiation incident on an inclined surface",
+   "year": 1980,
+   "authors": [
+    "Hay JE",
+    "Davies JA"
+   ],
+   "journal": "In: Hay JE, Won TK (eds) Proceedings of the First Canadian Solar Radiation Data Workshop. Ministry of Supply and Services Canada, Toronto, pp 59-72"
+  },
+  "Mobley1994": {
+   "doi": null,
+   "title": "Light and Water: Radiative Transfer in Natural Waters",
+   "year": 1994,
+   "authors": [
+    "Mobley CD"
+   ],
+   "journal": "Academic Press, San Diego (ISBN 0-12-502750-8)"
+  },
+  "Russell2019": {
+   "doi": "10.3390/rs11151757",
+   "title": "Water Column Optical Properties of Pacific Coral Reefs Across Geomorphic Zones and in Comparison to Offshore Waters",
+   "year": 2019,
+   "authors": [
+    "Russell BJ",
+    "Dierssen HM",
+    "Hochberg EJ"
+   ],
+   "journal": "Remote Sensing 11(15): 1757",
+   "checked": "2026-11-19 (CrossRef)"
+  },
+  "Coelho2017": {
+   "authors": [
+    "Coelho VR",
+    "Fenner D",
+    "Caruso C",
+    "Bayles BR",
+    "Huang Y",
+    "Birkeland C"
+   ],
+   "year": 2017,
+   "title": "Shading as a mitigation tool for coral bleaching in three common Indo-Pacific species",
+   "journal": "Journal of Experimental Marine Biology and Ecology 497: 152-163",
+   "doi": "10.1016/j.jembe.2017.09.016",
+   "used_for": "Field trial of 50 % and 75 % shade during heat stress (American Samoa); the heavier shade protected better.",
+   "checked": "2026-11-22 (publisher or index page)"
+  },
+  "Butcherine2023": {
+   "authors": [
+    "Butcherine P",
+    "Tagliafico A",
+    "Ellis SL",
+    "Kelaher BP",
+    "Hendrickson C",
+    "Harrison D"
+   ],
+   "year": 2023,
+   "title": "Intermittent shading can moderate coral bleaching on shallow reefs",
+   "journal": "Frontiers in Marine Science 10: 1162896",
+   "doi": "10.3389/fmars.2023.1162896",
+   "used_for": "Aquarium trial of 30 % shade for 0, 4 or 24 h a day under heat stress.",
+   "checked": "2026-11-22 (publisher or index page)"
+  },
+  "Tagliafico2022": {
+   "authors": [
+    "Tagliafico A",
+    "Baker P",
+    "Kelaher B",
+    "Ellis S",
+    "Harrison D"
+   ],
+   "year": 2022,
+   "title": "The Effects of Shade and Light on Corals in the Context of Coral Bleaching and Shading Technologies",
+   "journal": "Frontiers in Marine Science 9: 919382",
+   "doi": "10.3389/fmars.2022.919382",
+   "used_for": "Systematic review of shade and light experiments on corals, 1930-2021.",
+   "checked": "2026-11-22 (publisher or index page)"
+  },
+  "PooleAtkins1929": {
+   "authors": [
+    "Poole HH",
+    "Atkins WRG"
+   ],
+   "year": 1929,
+   "title": "Photo-electric Measurements of Submarine Illumination throughout the Year",
+   "journal": "Journal of the Marine Biological Association of the United Kingdom 16: 297-324",
+   "doi": null,
+   "url": "https://www.cambridge.org/core/journals/journal-of-the-marine-biological-association-of-the-united-kingdom/article/photoelectric-measurements-of-submarine-illumination-throughout-the-year/D9A848C7167338AF4FEB2D96C4530188",
+   "used_for": "Attenuation coefficient x Secchi depth = 1.7 (a rough guide; a 1980 correction in the same journal revised the constant downward).",
+   "checked": "2026-11-22 (publisher page)"
+  },
+  "Hersbach2020": {
+   "authors": [
+    "Hersbach H",
+    "Bell B",
+    "Berrisford P"
+   ],
+   "year": 2020,
+   "title": "The ERA5 global reanalysis",
+   "journal": "Quarterly Journal of the Royal Meteorological Society 146: 1999-2049",
+   "doi": "10.1002/qj.3803",
+   "used_for": "ERA5 reanalysis: hourly surface solar radiation used by PVGIS-ERA5 and by the Open-Meteo archive.",
+   "checked": "2026-11-22 (publisher or index page)"
+  },
+  "OpenMeteo": {
+   "authors": [
+    "Open-Meteo"
+   ],
+   "year": 2026,
+   "title": "Historical Weather API (ERA5 archive)",
+   "journal": "open-meteo.com",
+   "doi": null,
+   "url": "https://open-meteo.com/en/docs/historical-weather-api",
+   "used_for": "Hourly ERA5 global and diffuse irradiance fetched by the app for any site (data under CC BY 4.0)."
+  },
+  "FinkelsteinSchafer1971": {
+   "authors": [
+    "Finkelstein JM",
+    "Schafer RE"
+   ],
+   "year": 1971,
+   "title": "Improved goodness-of-fit tests",
+   "journal": "Biometrika 58: 641-645",
+   "doi": null,
+   "used_for": "Statistic used to choose the typical month for each calendar month (as in ISO 15927-4).",
+   "checked": "2026-11-22 (citation as indexed; DOI not checked)"
   }
  }
 }
