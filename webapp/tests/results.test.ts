@@ -1,0 +1,58 @@
+// The results page is built from computed results without a browser: run the pipeline on the example site and check
+// what the page says (quick preview resolution; the numbers themselves are covered by the golden tests).
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { lightFromJson } from "../src/core/surface.ts";
+import { compute, computeRobustness, computeClothOptions, type Inputs, type Data } from "../src/ui/compute.ts";
+import { resultsHtml, type Ctx } from "../src/ui/results.ts";
+
+const read = (p: string) => JSON.parse(readFileSync(new URL(`../../shared/${p}`, import.meta.url), "utf8"));
+const EX = read("examples/sipaway.json");
+const data: Data = { tables: read("tables/light_tables.json"), presets: read("corals/pe_presets.json"), light: lightFromJson(EX.light) };
+const base: Inputs = {
+  site: { name: EX.name, lat: EX.lat, lon: EX.lon, tz: EX.utc_offset_h }, start: [2025, 4, 28], end: [2025, 5, 12],
+  target: { shape: "circle", lx: 1.1, ly: 1.1 }, depth: 10, height: 0.75, water: { kd: 0.1, w0: 0.7, w0Lo: 0.5, w0Hi: 0.9 },
+  scenario: "both", sync: true, clothRating: 80, dynamicTargetReduction: 75, clothSize: null, canopy: null,
+  noonShift: 0, wind: null, coral: { preset: "typical", acclimate: "time" }, gridSpacing: 0.1, fouling: null, kdSeriesText: null, tideText: null,
+};
+const ctx = (state: Inputs, r: ReturnType<typeof compute>, expert: boolean): Ctx => ({ state, r, expert, version: "test",
+  ui: { day: null, dayMode: "mean", w0Source: "default", clothAuto: true, lightKind: "tmy" }, lightLabel: "test light", lightSource: "example",
+  presets: (data.presets as any).presets, info: () => "" });
+
+test("simple and expert pages render from a full run, with the shade-rating comparison", () => {
+  const r = compute(base, data, "full");
+  r.clothOptions = computeClothOptions(base);
+  const rob = computeRobustness(base, data, { constant: r.scenarios[0]!.panel, dynamic: r.scenarios[1]!.panel });
+  for (const s of r.scenarios) { s.robustness = rob[s.kind]!.rows; s.w0Range = rob[s.kind]!.range; }
+  const O = r.clothOptions!;
+  assert.deepEqual(O.map((o) => o.rating), [30, 50, 70, 80, 90]);
+  const cur = O.find((o) => o.current)!, C = r.scenarios[0]!;
+  // the comparison's row for the plan's own rating reproduces the plan (light is linear in the cloth's transmission)
+  assert.ok(Math.abs(cur.T - C.T) < 1e-9 && Math.abs(cur.dliMean - C.dliMean) < 1e-9 && Math.abs(cur.grossVsOpen - C.bio.grossVsOpen!) < 1e-9);
+  assert.ok(Math.abs(cur.first!.prDaily! - C.bioFirst!.prDaily!) < 1e-9);
+  // less shade: more light, and more photosynthesis before the corals adjust
+  for (let i = 1; i < O.length; i++) assert.ok(O[i]!.T < O[i - 1]!.T && O[i]!.first!.grossVsOpen < O[i - 1]!.first!.grossVsOpen);
+  // a 30 % cloth lets through 70 % itself; with side light the corals get at least that
+  assert.ok(O[0]!.T > 0.7 && O[0]!.T < 0.8);
+  for (const expert of [false, true]) {
+    const html = resultsHtml(ctx(base, r, expert));
+    assert.ok(!/NaN|undefined|\[object/.test(html), "no broken values");
+    for (const need of ["The plan at a glance", "How much shade?", "Through the day", "Through the deployment", "Checks before you build", "this plan", "first days"])
+      assert.ok(html.includes(need), need);
+    assert.equal(html.includes("Month by month"), expert);
+    assert.equal(html.includes("What if conditions differ?"), expert);
+    assert.ok(!html.includes("—"), "no em dashes in the interface text");
+  }
+});
+
+test("one kind of shading, a coral without respiration data and a preview all render", () => {
+  for (const [scenario, preset] of [["constant", "typical"], ["dynamic", "porites_lobata"]] as const) {
+    const inp: Inputs = { ...base, scenario, coral: { preset, acclimate: "time" } };
+    const r = compute(inp, data, "preview");
+    const html = resultsHtml(ctx(inp, r, true));
+    assert.ok(!/NaN|undefined|\[object/.test(html), `${scenario} ${preset}`);
+    assert.equal(html.includes("How much shade?"), scenario === "constant");
+    assert.equal(html.includes("Energy balance (P:R)"), preset === "typical");
+  }
+});

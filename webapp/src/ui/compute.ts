@@ -46,6 +46,9 @@ export interface ScenarioOut {
   dayCurves: { mean: number[][]; center: number[][]; east: number[][]; west: number[][] };   // every day [day][step]
   lightHist?: number[];                // hours per day in each light bin (area mean), bins 0..histMax
   bio: Record<string, number>;
+  bioDaily: { grossVsOpen: number[]; prDaily: number[] | null };   // per day, area mean
+  bioFirst: Record<string, number> | null;   // the same metrics before the corals adjust to the shade (Ek as in open water
+                                             // at this depth); null when the chosen acclimation already means that
   ek: number;
   clearance?: { share: number; hRule: number; hRuleDay: Day; hMin: number; never: number[] };
   contrast?: Contrast;                 // light at noon and in the morning and afternoon, shares of open water
@@ -61,7 +64,12 @@ export interface Results {
   days: Day[];
   points: number[];                    // interleaved x, y
   spacing: number;
-  open: { dliMean: number; dayDli: number[]; dayCurve: number[]; dayCurves: number[][]; lightHist: number[] };
+  open: { dliMean: number; dayDli: number[]; dayCurve: number[]; dayCurves: number[][]; lightHist: number[];
+    dayBeamShare: number[];            // per day: share of the open-water light at depth that arrives as the sun beam
+    bio: Record<string, number>;       // the coral metrics for unshaded corals at this depth
+    bioFirst: Record<string, number> | null };   // the same with Ek as in open water throughout (the baseline for bioFirst)
+  clothOptions?: ClothOption[] | null; // other shade ratings on the same cloth (null: not available)
+  canopyOptions?: CanopyOption[] | null;   // other canopy widths (expert)
   noons: number[];                     // solar noon per day, minutes
   histMax: number;                     // upper edge of the light histogram, umol m-2 s-1
   lightNotes: string[];                // problems with the light data or the UTC offset (shown first)
@@ -74,6 +82,13 @@ export interface Results {
   kdDays: number[];                    // Kd used on each day
   depthNoon: number[] | null;          // coral depth at solar noon on each day (tide), or null
 }
+
+/** One row of the shade-rating comparison: the same cloth with another rating (light is exactly linear in it). */
+export interface ClothOption { rating: number; tau: number; T: number; dliMean: number; grossVsOpen: number; prDaily: number | null;
+  hoursSaturated: number; hoursBelowEc: number | null; current: boolean;
+  first: { grossVsOpen: number; prDaily: number | null; hoursSaturated: number } | null }   // before the corals adjust (see bioFirst)
+/** One row of the canopy-width comparison (10 cm grid). */
+export interface CanopyOption { lx: number; ly: number; T: number; noon: number; side: number; current: boolean }
 
 export interface Data { tables: Tables; presets: PresetFile; light: HourlyLight }
 
@@ -103,11 +118,65 @@ function summarizeScenario(kind: "constant" | "dynamic", pan: Panel, r: PeriodRe
   const dayCurves = { mean: r.ed.map((day) => day.map(rowMean)), center: r.ed.map((day) => day.map((row) => row[iC]!)),
     east: r.ed.map((day) => day.map((row) => row[iE]!)), west: r.ed.map((day) => day.map((row) => row[iW]!)) };
   const b = biology(r, coral);
+  const fc = firstCoral(coral);
+  const bioFirst = fc ? biology(r, fc).mean : null;
+  const bioDaily = { grossVsOpen: b.daily.map((x) => x.grossVsOpen ?? NaN), prDaily: b.daily[0]?.prDaily !== undefined ? b.daily.map((x) => x.prDaily!) : null };
   return { kind, panel: pan, T: transmission(r), dliMean: pointDli.reduce((a, v) => a + v, 0) / nP, pointDli, pointSunHours: pointSun,
-    dayReduction, dayCurve, dayCurves, bio: b.mean, ek: b.ek.reduce((a, v) => a + v, 0) / b.ek.length };
+    dayReduction, dayCurve, dayCurves, bio: b.mean, bioDaily, bioFirst, ek: b.ek.reduce((a, v) => a + v, 0) / b.ek.length };
 }
 
 const now = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
+
+/** The coral before it adjusts to the shade: Ek as acclimated to open water at this depth. Null when the chosen
+ *  acclimation is already that, or the coral's sources give no growth light (Ek stays as measured). */
+function firstCoral(coral: Coral): Coral | null {
+  return coral.ekEmax && (coral.acclimate === "time" || coral.acclimate === "shade") ? { ...coral, acclimate: "site" } : null;
+}
+
+// The full-resolution cloth run is kept (in the worker) until the shade-rating comparison has been made from it.
+let kept: { result: PeriodResult; tauDays: number[] | null; tauClean: number; coral: Coral } | null = null;
+export const SHADE_RATINGS = [30, 50, 70, 80, 90];
+
+/** The same cloth with other shade ratings. Light under a cloth is exactly linear in its transmission
+ *  (E = E_opaque + tau (E_open - E_opaque), as periodFor), so no new light run is needed; the coral metrics are
+ *  recomputed for each rating. Fouling keeps its share: each day's transmission scales with the clean value. */
+export function computeClothOptions(inp: Inputs): ClothOption[] | null {
+  const k = kept; kept = null;
+  if (!k || !(k.tauClean < 0.98)) return null;
+  const r = k.result, cur = Math.round(100 * (1 - k.tauClean));
+  const ratings = [...new Set([...SHADE_RATINGS, cur])].sort((a, b) => a - b);
+  // light with the cloth opaque, from the run with the cloth as designed
+  const opq = r.ed.map((day, i) => { const t = k.tauDays ? k.tauDays[i]! : k.tauClean, eo = r.edOpen[i]!;
+    return day.map((row, s) => row.map((v) => Math.max(0, (v - t * eo[s]!) / (1 - t)))); });
+  const out: ClothOption[] = [];
+  for (const rating of ratings) {
+    const tau = 1 - rating / 100, isCur = rating === cur && Math.abs(tau - k.tauClean) < 1e-9;
+    const ed = opq.map((day, i) => { const t = k.tauDays ? (k.tauDays[i]! * tau) / k.tauClean : tau, eo = r.edOpen[i]!;
+      return day.map((row, s) => row.map((v) => v + t * (eo[s]! - v))); });
+    const pr: PeriodResult = { ...r, ed };
+    const b = biology(pr, k.coral).mean;
+    const fc = firstCoral(k.coral), f = fc ? biology(pr, fc).mean : null;
+    let dl = 0; for (const d of dliPerDay(pr)) dl += d.reduce((a, v) => a + v, 0) / r.nPoints;
+    out.push({ rating, tau, T: transmission(pr), dliMean: dl / r.days.length, grossVsOpen: b.grossVsOpen ?? NaN, prDaily: b.prDaily ?? null,
+      hoursSaturated: b.hoursSaturated ?? NaN, hoursBelowEc: b.prDaily !== undefined ? (b.hoursBelowEc ?? 0) : null, current: isCur,
+      first: f ? { grossVsOpen: f.grossVsOpen ?? NaN, prDaily: f.prDaily ?? null, hoursSaturated: f.hoursSaturated ?? NaN } : null });
+  }
+  void inp;
+  return out;
+}
+
+/** Other canopy widths around the designed one (10 cm grid, every day): light over the deployment and its timing. */
+export function computeCanopyOptions(inp: Inputs, data: Data, pan: Panel): CanopyOption[] {
+  const site = siteFrom(inp, data), all = deploymentDays(inp.start, inp.end, 1);
+  const water: Water = { kd: inp.water.kd, w0: inp.water.w0, depth: inp.depth };
+  const pts = targetGrid(inp.target, 0.1), wind = inp.wind ?? undefined;
+  const st = opticalState(water, data.tables);
+  return [0.6, 0.8, 1, 1.25, 1.5].map((f) => {
+    const p = { ...pan, lx: pan.lx * f };
+    const r = runPeriod(site, water, [p], pts, all, data.tables, 16, wind, st), c = noonContrast(r, site);
+    return { lx: p.lx, ly: p.ly, T: transmission(r), noon: c.noon, side: c.side, current: f === 1 };
+  });
+}
 
 /** The site with its light data and, when given, Kd by date and the tide (mean level over the whole deployment). */
 export function siteFrom(inp: Inputs, data: Data): Site {
@@ -159,6 +228,7 @@ export function compute(inp: Inputs, data: Data, level: "preview" | "full" | "ro
     so.tauDays = cs.tauDays;
     runs.push(cs.result);
     Tc = so.T; openRes = cs.result;
+    kept = level === "full" && !inp.clothSize ? { result: cs.result, tauDays: cs.tauDays, tauClean: tauC, coral } : null;
     lap("constant summary");
     out.push(so);
   }
@@ -208,10 +278,17 @@ export function compute(inp: Inputs, data: Data, level: "preview" | "full" | "ro
     for (const day of rr.ed) for (const row of day) for (let p = 0; p < nPP; p++) { const v = row[p]!; if (v > 1) hist[Math.min(NB - 1, Math.floor(v / bw))]! += w; }
     out[i]!.lightHist = hist;
   });
+  // unshaded corals at this depth: the same metrics, from the open-water light (one point)
+  const openOnly: PeriodResult = { ...o, ed: o.edOpen.map((dd) => Array.from(dd, (v) => Float64Array.of(v))), nPoints: 1,
+    sunlit: o.edOpen.map((dd) => Array.from(dd, () => Float64Array.of(1))) };
+  const openBio = biology(openOnly, coral).mean;
+  const fc0 = firstCoral(coral), openBioFirst = fc0 ? biology(openOnly, fc0).mean : null;
+  const dayBeamShare = o.beamOpen.map((bd, i) => { let b = 0, e = 0; for (const v of bd) b += v; for (const v of o.edOpen[i]!) e += v; return e > 0 ? b / e : 0; });
+  if (inp.scenario === "dynamic") kept = null;
   return {
     level, ms: now() - t0, days, points: Array.from(pts), spacing,
     open: { dliMean: openD.reduce((a, b) => a + b, 0) / openD.length, dayDli: openD, dayCurve: Array.from(o.edOpen[0]!),
-      dayCurves: o.edOpen.map((dd) => Array.from(dd)), lightHist: openHist },
+      dayCurves: o.edOpen.map((dd) => Array.from(dd)), lightHist: openHist, dayBeamShare, bio: openBio, bioFirst: openBioFirst },
     minutes: Array.from(o.minutes[0]!), noon: solarNoon(y, m, d, inp.site.lon, inp.site.tz) + inp.noonShift,
     noons: days.map(([yy, mm, dd]) => solarNoon(yy, mm, dd, inp.site.lon, inp.site.tz) + inp.noonShift), histMax,
     scenarios: out, warnings, timings: tm, beamShare: beamShare(o), kdDays: o.kdDays ?? days.map(() => inp.water.kd),
