@@ -194,7 +194,42 @@ def golden_surface() -> dict:
                           light_total=dl.light_total, light_dropped=dl.light_dropped))
     pairs = [(10.4675, 123.4506, 16.1883, -88.5992), (10.4675, 123.4506, 10.9, 123.5), (-18.0, 147.0, -18.4, 147.3)]
     dist = [dict(a=[a, b], b=[c, d], km=surface.distance_km(a, b, c, d)) for a, b, c, d in pairs]
-    return dict(clear_sky=clear, days=cases, distances=dist)
+    # ---- v5.2: values centred off the half hour (as PVGIS-SARAH3), and a typical year built from real years
+    cs9 = surface.HourlyLight(t_utc=cs.t_utc - 21.0, ghi=cs.ghi, dhi=cs.dhi, unit="W", wind=cs.wind, lat=cs.lat, lon=cs.lon,
+                              kind="tmy", center_min=9.0)
+    dl9 = surface.day_light(cs9, 2025, 6, 10, lat_b, lon_b, -6.0)
+    off = dict(name="clear_sky_belize_centred_at_9_min", center_min=9.0, lat=lat_b, lon=lon_b, tz=-6.0, y=2025, m=6, d=10,
+               par_direct_h=dl9.par_direct_h.tolist(), par_diffuse=dl9.par_diffuse.tolist(),
+               par_circumsolar_h=dl9.par_circumsolar_h.tolist(), light_total=dl9.light_total, light_dropped=dl9.light_dropped)
+    ty = typical_year_case()
+    return dict(clear_sky=clear, days=cases, distances=dist, off_center=off, typical_year=ty)
+
+
+def typical_year_input():
+    """The shared multi-year input (shared/golden/typical_year_input.json) as an HourlyLight."""
+    from . import surface
+    j = json.loads((SHARED / "golden" / "typical_year_input.json").read_text(encoding="utf-8"))
+    t0 = surface._iso_to_utc_min(j["start"])
+    n = len(j["ghi"])
+    return surface.HourlyLight(t_utc=t0 + 60.0 * np.arange(n), ghi=np.array(j["ghi"], float), dhi=np.array(j["dhi"], float),
+                               unit="W", lat=j["lat"], lon=j["lon"], database="PVGIS-ERA5", kind="hourly",
+                               center_min=float(j["center_min"]))
+
+
+def typical_year_case() -> dict:
+    from . import surface
+    t = surface.typical_year(typical_year_input())
+    ks = [0, 1000, 2500, 4000, 5500, 7000, 8759]
+    om = dict(latitude=10.5, longitude=123.5, utc_offset_seconds=0, hourly_units=dict(wind_speed_10m="km/h"),
+              hourly=dict(time=[f"2020-01-{1 + k // 24:02d}T{k % 24:02d}:00" for k in range(48)],
+                          shortwave_radiation=[max(0.0, 800.0 - 30.0 * abs(k % 24 - 4)) if k % 24 < 12 else 0.0 for k in range(46)] + [None, None],
+                          diffuse_radiation=[max(0.0, 300.0 - 20.0 * abs(k % 24 - 4)) if k % 24 < 12 else 0.0 for k in range(46)] + [None, None],
+                          wind_speed_10m=[18.0] * 48))
+    o = surface.parse_open_meteo(om)
+    return dict(years=t.tmy_years, database=t.database, ghi_sum=float(t.ghi.sum()), dhi_sum=float(t.dhi.sum()),
+                samples=[dict(k=k, ghi=float(t.ghi[k]), dhi=float(t.dhi[k])) for k in ks], t0=float(t.t_utc[0]),
+                open_meteo=dict(reply=om, n=len(o.ghi), t0=float(o.t_utc[0]), center_min=o.center_min, ghi_sum=float(o.ghi.sum()),
+                                dhi_sum=float(o.dhi.sum()), wind0=float(o.wind[0]), lat=o.lat, lon=o.lon))
 
 
 def write_all() -> list[str]:

@@ -8,12 +8,20 @@ Sources (see shared/references.json):
   (McCree 1972). The direct beam uses 4.57.
 - When only global irradiance is known, the diffuse fraction is estimated from the clearness index with the
   Erbs et al. (1982) correlation.
-- PVGIS files are hourly averages with UTC time stamps. Hourly series (seriescalc) are stamped at the middle
-  of the hour; TMY files are stamped at the start of the hour with an "Irradiance Time Offset" of 0.5 h.
+- PVGIS files hold one value per hour with UTC time stamps. Where PVGIS uses the ERA5 reanalysis the value is the
+  mean of a clock hour, centred at hh:30 (hourly series are stamped hh:30; TMY files are stamped hh:00 with an
+  "Irradiance Time Offset" of 0.5 h). Where it uses the SARAH-3 satellite record (Europe, Africa, the Red Sea,
+  the western Indian Ocean) the value is the irradiance at the satellite scan a few minutes after the hour
+  (stamps such as hh:09; TMY offset such as 0.153 h). Each value is used as the mean of the hour centred on its
+  own time (HourlyLight.center_min), so the light keeps its true position relative to the sun (v5.2; before, all
+  values were placed on hh:30 hours, which put SARAH-3 data about 40 minutes early).
+- Open-Meteo archive files (ERA5) are hourly means of the hour before each UTC stamp, so centred at hh:30 too.
 
-Hourly averages are spread over the day so that each hour keeps exactly its total: within an hour the
-horizontal irradiance follows the cosine of the solar zenith angle (the clear-sky shape), scaled to the
-hour's mean. Direct normal irradiance is then constant within each hour.
+Hourly values are spread over the day so that each hour keeps exactly its total (v5.2): the hour's clearness
+(irradiance / cos zenith) is interpolated linearly in time between the centres of neighbouring hours, multiplied
+by the cosine of the solar zenith angle at each minute, and rescaled so that the hour's mean equals the data.
+Global and direct irradiance are treated alike. Before v5.2 the clearness was held constant within each hour,
+which made the light jump at every hour boundary.
 - Circumsolar sky light (v5.1): part of the diffuse light comes from around the sun. Following Hay and Davies
   (1980), the share A = DNI / extraterrestrial normal irradiance (the anisotropy index, 0..1) of the diffuse
   light is treated as coming from the sun's direction; the rest is an isotropic sky. A clear sky has a large A;
@@ -44,7 +52,9 @@ class HourlyLight:
     """Hourly-average light at the surface, on a horizontal plane.
     t_utc: minutes since 1970-01-01 00:00 UTC at the MIDDLE of each hour.
     ghi, dhi: global and diffuse horizontal irradiance. unit 'W' (W m-2) or 'PAR' (umol m-2 s-1).
-    wind: 10-m wind speed (m s-1) or None."""
+    wind: 10-m wind speed (m s-1) or None.
+    center_min: minute of the UTC hour on which every value is centred (30 for clock-hour means; e.g. 9 for
+    PVGIS-SARAH3). tmy_years: for a typical year built here, the year chosen for each calendar month."""
     t_utc: np.ndarray
     ghi: np.ndarray
     dhi: np.ndarray
@@ -56,6 +66,8 @@ class HourlyLight:
     database: str = ""
     kind: str = "hourly"      # 'tmy' or 'hourly'
     notes: list = field(default_factory=list)
+    center_min: float = 30.0
+    tmy_years: list | None = None
 
 
 # ------------------------------------------------------------------ PAR conversion
@@ -156,27 +168,146 @@ def parse_pvgis(text: str) -> HourlyLight:
     ghi = np.clip(ghi, 0.0, None); dhi = np.clip(np.minimum(dhi, ghi), 0.0, None)
     h = HourlyLight(t_utc=t, ghi=ghi, dhi=dhi, unit="W", wind=wind,
                     lat=float(lat) if lat else None, lon=float(lon) if lon else None,
-                    source="PVGIS 5.3", database=database, kind=kind)
+                    source="PVGIS 5.3", database=database, kind=kind, center_min=center_minute(t[0]))
     return tmy_to_reference_year(h) if kind == "tmy" else h
 
 
+def center_minute(t_utc_min: float) -> float:
+    """Minute of the UTC hour (0 <= m < 60) of a time in minutes since the epoch."""
+    return float(t_utc_min - 60.0 * math.floor(t_utc_min / 60.0))
+
+
 def tmy_to_reference_year(h: HourlyLight) -> HourlyLight:
-    """Re-date a TMY onto REF_YEAR: value k is the average for UTC hour k of the year (centred at k h + 30 min).
-    TMY months come from different years, so only (month, day, hour) is kept. 29 February is dropped."""
+    """Re-date a TMY onto REF_YEAR: value k belongs to UTC hour k of the year and is centred at k h + center_min
+    (30 min for clock-hour means). TMY months come from different years, so only (month, day, hour) is kept.
+    29 February is dropped."""
     out_g = np.zeros(8760); out_d = np.zeros(8760); out_w = np.full(8760, np.nan)
     base = solar.days_from_civil(REF_YEAR, 1, 1)
+    cm = h.center_min
     for i, tu in enumerate(h.t_utc):
-        c = tu - 30.0
-        _, mm, dd = solar.civil_from_days(int(c // 1440))
+        hh = int(round((tu - cm) / 60.0))                                  # whole UTC hours since the epoch
+        _, mm, dd = solar.civil_from_days(hh // 24)
         if (mm, dd) == (2, 29):
             continue
-        k = (solar.days_from_civil(REF_YEAR, mm, dd) - base) * 24 + int((c % 1440) // 60)
+        k = (solar.days_from_civil(REF_YEAR, mm, dd) - base) * 24 + hh % 24
         out_g[k] = h.ghi[i]; out_d[k] = h.dhi[i]
         if h.wind is not None:
             out_w[k] = h.wind[i]
-    t = base * 1440.0 + 30.0 + 60.0 * np.arange(8760)
+    t = base * 1440.0 + cm + 60.0 * np.arange(8760)
     return HourlyLight(t_utc=t, ghi=out_g, dhi=out_d, unit=h.unit, wind=None if h.wind is None else out_w,
-                       lat=h.lat, lon=h.lon, source=h.source, database=h.database, kind="tmy")
+                       lat=h.lat, lon=h.lon, source=h.source, database=h.database, kind="tmy", center_min=cm,
+                       tmy_years=h.tmy_years)
+
+
+# ------------------------------------------------------------------ Open-Meteo (ERA5) and typical years
+WIND_TO_MS = {"m/s": 1.0, "km/h": 1.0 / 3.6, "mp/h": 0.44704, "kn": 0.514444}
+
+
+def _iso_to_utc_min(stamp: str) -> float:
+    """'YYYY-MM-DDTHH:MM' (UTC) to minutes since the epoch."""
+    y, m, d = int(stamp[0:4]), int(stamp[5:7]), int(stamp[8:10])
+    hh, mm = int(stamp[11:13]), int(stamp[14:16])
+    return solar.days_from_civil(y, m, d) * 1440.0 + hh * 60.0 + mm
+
+
+def parse_open_meteo(data) -> HourlyLight:
+    """Read an Open-Meteo archive (ERA5) reply: hourly shortwave_radiation and diffuse_radiation in W m-2 on a horizontal
+    plane, requested with timezone=GMT; wind_speed_10m is used when present. `data` is the JSON text or the parsed object.
+    Open-Meteo stamps each value at the END of the hour it averages, so a value stamped hh:00 is centred at hh:00 - 30 min.
+    Hours not yet available (null) at the end are cut; a gap elsewhere is an error."""
+    import json as _json
+    j = _json.loads(data) if isinstance(data, (str, bytes)) else data
+    if j.get("error"):
+        raise ValueError(f"Open-Meteo: {j.get('reason', 'request refused')}")
+    h = j.get("hourly") or {}
+    if "time" not in h or "shortwave_radiation" not in h or "diffuse_radiation" not in h:
+        raise ValueError("Not an Open-Meteo hourly reply with shortwave_radiation and diffuse_radiation.")
+    if j.get("utc_offset_seconds", 0) != 0:
+        raise ValueError("Open-Meteo data must be requested with timezone=GMT.")
+    n = len(h["time"])
+    while n > 0 and (h["shortwave_radiation"][n - 1] is None or h["diffuse_radiation"][n - 1] is None):
+        n -= 1
+    if n == 0:
+        raise ValueError("The Open-Meteo reply holds no radiation values.")
+    g = h["shortwave_radiation"][:n]; dd = h["diffuse_radiation"][:n]
+    if any(v is None for v in g) or any(v is None for v in dd):
+        raise ValueError("The Open-Meteo reply has gaps in the radiation values.")
+    t = np.array([_iso_to_utc_min(x) for x in h["time"][:n]]) - 30.0
+    if n > 1 and round((t[-1] - t[0]) / 60.0) + 1 != n:
+        raise ValueError("The Open-Meteo reply is not a gap-free hourly series.")
+    ghi = np.clip(np.array(g, dtype=float), 0.0, None); dhi = np.clip(np.minimum(np.array(dd, dtype=float), ghi), 0.0, None)
+    wind = None
+    if "wind_speed_10m" in h:
+        f = WIND_TO_MS.get((j.get("hourly_units") or {}).get("wind_speed_10m", "km/h"), 1.0 / 3.6)
+        wind = np.array([np.nan if v is None else float(v) * f for v in h["wind_speed_10m"][:n]])
+    lat = j.get("latitude"); lon = j.get("longitude")
+    return HourlyLight(t_utc=t, ghi=ghi, dhi=dhi, unit="W", wind=wind, lat=None if lat is None else float(lat),
+                       lon=None if lon is None else float(lon), source="Open-Meteo archive API", database="ERA5 (Open-Meteo)",
+                       kind="hourly", center_min=center_minute(t[0]))
+
+
+def typical_year(h: HourlyLight, candidates: int = 3) -> HourlyLight:
+    """A typical year from several years of hourly data: for every calendar month one year is chosen and its hours are
+    copied. Choice (the irradiance part of ISO 15927-4): the daily global irradiation of each candidate year-month is
+    compared with all years of that month by the Finkelstein-Schafer statistic (mean absolute difference between the
+    two cumulative distributions); of the `candidates` closest years, the one whose monthly mean is nearest the
+    all-year mean is taken. Days run from local solar midnight (whole hours from the longitude); the first and last
+    part-days of a month are left out of the statistic. Only complete UTC months are candidates; 29 February is dropped.
+    Returns a 'tmy' HourlyLight on REF_YEAR with tmy_years = the year chosen for each month."""
+    if h.kind != "hourly":
+        raise ValueError("typical_year needs an hourly series of real years")
+    cm = h.center_min
+    hours = np.rint((np.asarray(h.t_utc, dtype=float) - cm) / 60.0).astype(np.int64)      # whole UTC hours since the epoch
+    h0 = int(hours[0])
+    if not np.array_equal(hours, h0 + np.arange(len(hours))):
+        raise ValueError("typical_year needs a gap-free hourly series")
+    y_first, _, _ = solar.civil_from_days(h0 // 24)
+    y_last, _, _ = solar.civil_from_days(int(hours[-1]) // 24)
+    s0 = (-utc_offset_from_lon(h.lon)) % 24 if h.lon is not None else 0                    # UTC hour of local midnight
+    blocks = {}                                                                            # (month, year) -> first index
+    for y in range(y_first, y_last + 1):
+        for m in range(1, 13):
+            a = solar.days_from_civil(y, m, 1) * 24 - h0
+            b = (solar.days_from_civil(y + (m == 12), m % 12 + 1, 1)) * 24 - h0
+            if a >= 0 and b <= len(hours):
+                blocks[(m, y)] = (a, b)
+    base = solar.days_from_civil(REF_YEAR, 1, 1)
+    out_g = np.zeros(8760); out_d = np.zeros(8760); out_w = np.full(8760, np.nan)
+    chosen = []
+    for m in range(1, 13):
+        years = [y for (mm, y) in blocks if mm == m]
+        if not years:
+            raise ValueError(f"typical_year: no complete month {m} in the data")
+        daily = {}
+        for y in years:
+            a, b = blocks[(m, y)]
+            nd = (b - a - s0) // 24
+            daily[y] = np.array([sum(h.ghi[a + s0 + 24 * k:a + s0 + 24 * k + 24].tolist()) for k in range(nd)])   # left-to-right sums, as the app
+        allv = np.sort(np.concatenate([daily[y] for y in years]))
+        mean_all = sum(allv.tolist()) / len(allv)
+        rank = []
+        for y in years:
+            v = np.sort(daily[y]); n = len(v)
+            f_all = np.searchsorted(allv, v, side="right") / len(allv)
+            fs = sum(np.abs(f_all - (np.arange(n) + 1.0) / n).tolist()) / n
+            rank.append((fs, y, abs(sum(v.tolist()) / n - mean_all)))
+        rank.sort(key=lambda r: (r[0], r[1]))
+        best = min(rank[:max(1, candidates)], key=lambda r: (r[2], r[0], r[1]))
+        y = best[1]; chosen.append(int(y))
+        a, b = blocks[(m, y)]
+        for i in range(a, b):
+            hh = h0 + i
+            _, mm, dd = solar.civil_from_days(hh // 24)
+            if (mm, dd) == (2, 29):
+                continue
+            k = (solar.days_from_civil(REF_YEAR, mm, dd) - base) * 24 + hh % 24
+            out_g[k] = h.ghi[i]; out_d[k] = h.dhi[i]
+            if h.wind is not None:
+                out_w[k] = h.wind[i]
+    t = base * 1440.0 + cm + 60.0 * np.arange(8760)
+    return HourlyLight(t_utc=t, ghi=out_g, dhi=out_d, unit=h.unit, wind=None if h.wind is None else out_w, lat=h.lat, lon=h.lon,
+                       source=h.source, database=f"{h.database} typical year {min(y for _, y in blocks)}-{max(y for _, y in blocks)}",
+                       kind="tmy", center_min=cm, tmy_years=chosen)
 
 
 # ------------------------------------------------------------------ day series
@@ -203,18 +334,20 @@ def hourly_window(h: HourlyLight, y: int, m: int, d: int, tz: float):
     from different years; 29 February falls back to 28 February.
     Hourly series: the requested date must be inside the series."""
     start = solar.days_from_civil(y, m, d) * 1440.0 - 60.0 * tz          # local midnight in UTC minutes
-    first = math.floor((start - 60.0) / 60.0) * 60.0 + 30.0                # hour centers at hh:30
-    centers = np.arange(first, start + 1440.0 + 60.0, 60.0)
+    cm = h.center_min                                                      # hour centers at hh:cm (hh:30 for hour means)
+    first = math.floor((start - 60.0 - cm) / 60.0) * 60.0 + cm
+    centers = np.arange(first, start + 1440.0 + 90.0, 60.0)
     centers = centers[(centers + 30.0 > start) & (centers - 30.0 < start + 1440.0)]
     wind_all = h.wind if h.wind is not None else np.full(len(h.ghi), np.nan)
     if h.kind == "tmy":
         base = solar.days_from_civil(REF_YEAR, 1, 1)
         idx = []
         for c in centers:
-            _, mm, dd = solar.civil_from_days(int((c - 30.0) // 1440))
+            hh = int(round((c - cm) / 60.0))                               # whole UTC hours since the epoch
+            _, mm, dd = solar.civil_from_days(hh // 24)
             if (mm, dd) == (2, 29):
                 mm, dd = 2, 28
-            idx.append((solar.days_from_civil(REF_YEAR, mm, dd) - base) * 24 + int(((c - 30.0) % 1440) // 60))
+            idx.append((solar.days_from_civil(REF_YEAR, mm, dd) - base) * 24 + hh % 24)
     else:
         pos = {round(float(tu), 3): i for i, tu in enumerate(h.t_utc)} if not hasattr(h, "_pos") else h._pos
         object.__setattr__(h, "_pos", pos)
@@ -230,8 +363,10 @@ def hourly_window(h: HourlyLight, y: int, m: int, d: int, tz: float):
 
 def day_light(h: HourlyLight, y: int, m: int, d: int, lat: float, lon: float, tz: float,
               step: float = 10.0, noon_shift: float = 0.0, circumsolar: bool = True) -> DayLight:
-    """Surface light for one local day: hourly averages spread with a cos(zenith) shape inside each hour
-    (each hour keeps its total exactly), converted to PAR, averaged onto steps of `step` minutes.
+    """Surface light for one local day from hourly values, converted to PAR and averaged onto steps of `step` minutes.
+    Inside each hour the light follows cos(zenith) times the hour's clearness (irradiance / mean cos zenith), which is
+    interpolated linearly in time between the centres of neighbouring hours; the result is rescaled so that each hour
+    keeps its total exactly. Global and direct irradiance are treated alike (direct never above global).
     Timing guard: an hour can hold at most KT_MAX times the light arriving on a horizontal plane above the atmosphere
     for the sun computed in that hour. More than that means the data are for another place or are mistimed; the excess
     is dropped (and counted in light_dropped) instead of being squeezed into the few minutes the sun is up."""
@@ -242,29 +377,58 @@ def day_light(h: HourlyLight, y: int, m: int, d: int, lat: float, lon: float, tz
     g_f = np.zeros_like(fine); b_f = np.zeros_like(fine); w_f = np.full_like(fine, np.nan); a_f = np.zeros_like(fine)
     doy = solar.days_from_civil(y, m, d) - solar.days_from_civil(y, 1, 1) + 1
     cap_unit = 1.0 if h.unit == "W" else PAR_FRACTION * Q_DIRECT     # W m-2 -> umol m-2 s-1 upper bound
+    e0n = float(extraterrestrial_horizontal(doy, 1.0)) * cap_unit
     total = dropped = 0.0
-    for c, G, D, W in zip(centers, ghi, dhi, wind):
-        G = float(G); D = float(D)
-        lo = c - 30.0 - day0                                  # hour start in local minutes (may be < 0)
-        hour_fine = lo + np.arange(0.5, 60.0, 1.0)
-        czh = np.clip(np.cos(np.radians(solar.sun_with_noon(y, m, d, hour_fine, lat, lon, tz, noon_shift).zenith_geometric)), 0.0, None)
-        sel = (fine >= lo) & (fine < lo + 60.0)
-        mean_s = czh.mean()
-        inside = float(sel.sum())
-        total += G * inside
-        cap = KT_MAX * float(extraterrestrial_horizontal(doy, mean_s)) * cap_unit
-        if G > cap:                                           # the data and the computed sun disagree
-            dropped += (G - cap) * inside
-            D = D * cap / G if G > 0 else 0.0
-            G = cap
-        if mean_s > 0:
-            g_f[sel] = G * cz[sel] / mean_s
-            b_f[sel] = (G - D) * cz[sel] / mean_s
-            if circumsolar:      # Hay-Davies anisotropy index: DNI over the extraterrestrial normal irradiance
-                dni = (G - D) / mean_s
-                e0n = float(extraterrestrial_horizontal(doy, 1.0)) * cap_unit
-                a_f[sel] = min(max(dni / e0n, 0.0), 1.0) if e0n > 0 else 0.0
-        w_f[sel] = W
+    n_h = len(centers)
+    lo = np.asarray(centers, dtype=float) - 30.0 - day0       # hour starts in local minutes (may be < 0)
+    off = np.arange(0.5, 60.0, 1.0)
+    czh = []; mean_s = np.zeros(n_h); G = np.zeros(n_h); B = np.zeros(n_h); inside = []
+    for k in range(n_h):
+        c = np.clip(np.cos(np.radians(solar.sun_with_noon(y, m, d, lo[k] + off, lat, lon, tz, noon_shift).zenith_geometric)), 0.0, None)
+        czh.append(c); mean_s[k] = c.mean()
+        g = float(ghi[k]); dd = float(dhi[k])
+        sel = (fine >= lo[k]) & (fine < lo[k] + 60.0)
+        inside.append(sel)
+        n_in = float(sel.sum())
+        total += g * n_in
+        cap = KT_MAX * float(extraterrestrial_horizontal(doy, mean_s[k])) * cap_unit
+        if g > cap:                                           # the data and the computed sun disagree
+            dropped += (g - cap) * n_in
+            dd = dd * cap / g if g > 0 else 0.0
+            g = cap
+        G[k] = g; B[k] = g - dd
+    ok = (mean_s > 0) & (G > 0)                               # hours with sun and light (PVGIS-ERA5 gives 0 for the
+    q = np.where(ok, G / np.where(ok, mean_s, 1.0), 0.0)      # hour of sunrise; no interpolation towards such hours)
+    qb = np.where(ok, B / np.where(ok, mean_s, 1.0), 0.0)     # clearness of each hour: global and direct
+
+    def interp(vals, k, t):
+        """vals at the hour centres, linear in time towards the neighbouring hour (flat where it has no light)."""
+        dt = (np.asarray(t, dtype=float) - (lo[k] + 30.0)) / 60.0     # -0.5 .. 0.5
+        out = np.full(dt.shape, vals[k])
+        if k > 0 and ok[k - 1]:
+            w = np.clip(-dt, 0.0, None)
+            out = np.where(dt < 0, vals[k] + w * (vals[k - 1] - vals[k]), out)
+        if k + 1 < n_h and ok[k + 1]:
+            w = np.clip(dt, 0.0, None)
+            out = np.where(dt >= 0, vals[k] + w * (vals[k + 1] - vals[k]), out)
+        return out
+
+    for k in range(n_h):
+        sel = inside[k]
+        w_f[sel] = wind[k]
+        if not ok[k]:
+            continue
+        th = lo[k] + off
+        sg = float(np.sum(interp(q, k, th) * czh[k])); sb = float(np.sum(interp(qb, k, th) * czh[k]))
+        fg = 60.0 * G[k] / sg if sg > 0 else 0.0              # keeps the hour's total
+        fb = 60.0 * B[k] / sb if sb > 0 else 0.0
+        tf = fine[sel]
+        gg = interp(q, k, tf) * cz[sel] * fg
+        dni = interp(qb, k, tf) * fb                          # direct normal irradiance at each minute
+        g_f[sel] = gg
+        b_f[sel] = np.minimum(dni * cz[sel], gg)
+        if circumsolar:          # Hay-Davies anisotropy index: DNI over the extraterrestrial normal irradiance
+            a_f[sel] = np.clip(dni / e0n, 0.0, 1.0) if e0n > 0 else 0.0
     d_f = g_f - b_f
     if h.unit == "W":
         pb, pd = to_par(g_f, d_f)
