@@ -60,6 +60,7 @@ td .sub,th .sub{margin:0;font-weight:400}
 .step h3 i{font-style:normal;flex:none;display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--sea);color:#fff;font-size:12px;font-weight:600}
 .field{display:grid;grid-template-columns:minmax(88px,1fr) minmax(0,auto);align-items:center;gap:8px;margin:9px 0}
 .field>label{min-width:0}
+.field .sel{max-width:min(100%,214px)}
 .field>:last-child{justify-self:end;max-width:100%;min-width:0}
 .val{font-variant-numeric:tabular-nums;font-weight:650}
 .lab{margin:12px 0 6px}
