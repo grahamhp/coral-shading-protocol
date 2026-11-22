@@ -32,10 +32,13 @@ These need the repository owner (GitHub settings, Zenodo).
 
 1. Review the branch `v5.2.0` (it contains v5.1.0). Open `webapp/dist/index.html` after `npm run build`, or the
    preview file sent with the work. Decide the two items marked **[needs you]** in DECISIONS 62 and 64.
+   *(Done 22 Nov 2026: both decided, and the starting point and coral adjustment set in DECISIONS 69 and 70.)*
 2. **Check:** `cd python && python -m pytest`; `cd webapp && npx tsc -p tsconfig.json && npm test && npm run build`.
    In the app: try three example reefs, a site with no example (weather is fetched), a PVGIS file, Expert mode.
 3. Merge `v5.2.0` into `main`. The workflow then publishes the app to GitHub Pages once both test suites pass.
-4. Tag `v5.2.0` on `main` and create the GitHub release (Zenodo then issues a new version DOI).
+   *(Done 22 Nov 2026, with the website page in step 5.)*
+4. Tag `v5.2.0` on `main` and create the GitHub release (Zenodo then issues a new version DOI). **Not done yet:**
+   this mints a DOI, so it waits for the owner's go-ahead.
 5. **Website.** The page reef-scuba.org/coral-shading-tool serves its own copy of the app from
    `public/embeds/coral-shading-protocol.html` in the website repository. After a new release:
    `node scripts/update-shading-tool.mjs` there, set the version in `src/pages/coral-shading-tool.astro`, commit.

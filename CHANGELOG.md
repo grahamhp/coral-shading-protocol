@@ -1,6 +1,6 @@
 # Changelog
 
-## 5.2.0 (not yet released)
+## 5.2.0 (app published 22 Nov 2026; release tag and DOI to follow)
 
 Made ready to show at Reef Futures 2026. Includes everything in 5.1.0 below.
 
