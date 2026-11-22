@@ -263,3 +263,49 @@ alternative was. Items marked **[needs you]** are waiting on your approval or in
     tables for every ω₀.
 60. **App speed fix.** V8 deoptimized the inner loops after a few runs because panels of several object shapes
     reached them (robustness 30 s instead of 3 s); panels are now copied into one fixed shape first.
+
+## 22 November 2026: ready to show (v5.2.0)
+
+Asked for: a tool that is intuitive in Simple mode, detailed in Expert mode, with tables that inform choices,
+valid data, and a full-size place on reef-scuba.org. You also asked whether the day curves are right.
+
+61. **The day curves: one bug, one artifact, and the physics.** (a) *Bug.* PVGIS-SARAH3 values (Europe, Africa, the
+    Red Sea, the western Indian Ocean) are for a few minutes past the hour; the app placed every value on the half
+    hour, which put that light 39 minutes early (skewed days, light cut off before sunset) and refused SARAH-3
+    hourly series. Fixed: every value keeps its own time. ERA5 sites (Sipaway, the Pacific, the Americas) were
+    placed correctly. (b) *Artifact.* Hourly data were spread within each hour at constant clearness, so the curve
+    jumped at every hour boundary. Now the clearness is interpolated between hours and each hour still keeps its
+    total; designs unchanged (canopy 0.04 cm). (c) *Physics.* On cloudy days a canopy shades like a cloth because
+    the light comes from the whole sky; the day view now says so and offers the average, clearest and cloudiest
+    day. Checked against the Monte Carlo on five days through the deployment (validation, section 4).
+62. **Weather for any site: ERA5 through Open-Meteo, PVGIS stays the reference** (you chose this "if it's as good").
+    It is as good where PVGIS itself uses ERA5 (hourly correlation 0.993–0.999, mean within 3 %), which is
+    everywhere outside about 65° W to 65° E. Inside that band PVGIS has satellite data and is better (Mombasa: daily
+    correlation 0.74); the app says so in its checks and keeps the PVGIS file route. Typical year: one real year
+    per calendar month, chosen by the Finkelstein–Schafer statistic on daily irradiation (as ISO 15927-4, irradiance
+    only). **[needs you]** Open-Meteo's free service is for non-commercial use with attribution (in the footer); I
+    could not open its terms page from here, so please confirm REEF Scuba's use fits.
+63. **Ten example reefs with PVGIS typical years** travel with the app (5.4 MB in all), so it works offline at a
+    conference table: Sipaway, Florida Keys, Belize, Bonaire, Eilat, Mombasa, Maldives, Lizard Island, Kāneʻohe
+    Bay, Moorea. Their dates are examples in the local warm season, not advice.
+64. **Coral numbers: "first days" beside "once adjusted".** **[needs you]** With the v5.1 default (Ek follows the
+    shade within about a week, Pmax and respiration fixed) an adjusted coral photosynthesizes almost as much under
+    90 % shade as unshaded (P:R 1.15 against 1.12), so the adjusted numbers could not rank shade levels. The app
+    now also shows the corals as they are when the shade goes up (Ek as in open water at this depth): under the
+    example's 80 % cloth, photosynthesis 42 % of unshaded and P:R 0.44, against 1.04 unshaded. The shade-rating
+    table uses these. The wording is neutral (a note, not a warning) and says the truth lies between. Alternative:
+    show only the adjusted values, as v5.1 did. The example now shows a first-days energy deficit for the 80 %
+    cloth used at Sipaway; please check that this is how you want it presented.
+65. **Shade-rating table without new light runs.** Light under a cloth is exactly linear in its transmission
+    (already used for fouling), so 30, 50, 70, 80 and 90 % cloths of the same size follow from the one run; only
+    the coral metrics are recomputed. The trials cited beside it (Coelho et al. 2017; Butcherine et al. 2023;
+    Tagliafico et al. 2022) were checked on the publishers' pages. The app states that it does not predict
+    bleaching.
+66. **Default cloth stays 80 %** (no evidence-based reason to move it; the ratings table shows the alternatives).
+67. **Interface.** Simple mode asks five questions in plain words; Expert adds every variable, the coral response,
+    month by month, other conditions and other canopy widths. Series colors were checked for color-blind separation
+    and contrast (canopy amber darkened to #cf7f10). Charts show values under the pointer. When embedded, the app
+    reports its height to the host page so the frame has no scrollbar of its own.
+68. **Python.** `design(light="era5")` and `--light era5` use the same Open-Meteo request and typical-year method
+    as the app; `surface.typical_year` and `surface.parse_open_meteo` are covered by shared golden values.
+

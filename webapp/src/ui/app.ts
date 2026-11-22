@@ -212,7 +212,7 @@ function renderLeft() {
   const kdP = KD_PRESETS.find((p) => p[0] === ui.kdKey);
   $("#left").innerHTML = `
   <section class="card step"><h3><i>1</i>Where is the reef? ${info("site")}</h3>
-    <div class="field"><label for="example">Example reefs</label>${sel("example", [["", "Choose…"], ...EXAMPLES.map((e) => [e.id, e.name] as [string, string])], ui.exampleId)}</div>
+    <div class="field"><label for="example">Examples</label>${sel("example", [["", "Choose…"], ...EXAMPLES.map((e) => [e.id, e.name] as [string, string])], ui.exampleId)}</div>
     <div id="map" class="map"><div class="map-off">The map needs internet. Type coordinates below.</div></div>
     <div class="row"><input id="search" class="txt" placeholder="Search a place" aria-label="Search a place"><button id="btn-search" class="btn ghost sm">Find</button></div>
     <div class="coords"><label>Latitude<input id="lat" type="number" step="0.0001" value="${state.site.lat}"></label><label>Longitude<input id="lon" type="number" step="0.0001" value="${state.site.lon}"></label><label>UTC offset<input id="tz" type="number" step="0.5" value="${state.site.tz}"></label></div>
@@ -681,7 +681,7 @@ function boot() {
     <div class="seg" data-tog="mode" role="group" aria-label="Mode"><button type="button" data-v="simple" class="on">Simple</button><button type="button" data-v="expert">Expert</button></div>
     <span class="chip" id="chip"></span><div class="spacer"></div><span id="status" class="status" role="status">Starting…</span>
     <button class="btn line" id="btn-reset" title="Back to the starting example">Start over</button><button class="btn light" data-export="report">Report</button></header>
-  <main class="wrap"><aside id="left" aria-label="Inputs"></aside><section id="right" aria-label="Results" aria-live="polite"><div class="card"><p>Computing…</p></div></section></main>
+  <main class="wrap"><aside id="left" aria-label="Inputs"></aside><section id="right" aria-label="Results"><div class="card"><p>Computing…</p></div></section></main>
   <footer class="foot">Free and open source (MIT) from REEF Scuba: <a href="https://github.com/grahamhp/coral-shading-protocol" target="_blank" rel="noopener">code, methods and validation</a>. Sunlight data: PVGIS © European Union; ERA5 (Copernicus Climate Change Service) via <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo.com</a> (CC BY 4.0). Place search © OpenStreetMap contributors. Imagery: Sentinel-2 cloudless by EOX.</footer>
   <div id="tip" class="tip" hidden></div>`;
   document.addEventListener("change", onInput);

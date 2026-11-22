@@ -1,8 +1,8 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite the version you used."
 title: "Coral Shading Protocol"
-version: "5.1.0"
-date-released: "2026-11-19"
+version: "5.2.0"
+date-released: "2026-11-22"
 url: "https://grahamhp.github.io/coral-shading-protocol/"
 authors:
   - family-names: Patterson

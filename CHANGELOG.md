@@ -1,5 +1,43 @@
 # Changelog
 
+## 5.2.0 (not yet released)
+
+Made ready to show at Reef Futures 2026. Includes everything in 5.1.0 below.
+
+**Light data**
+
+- **Fixed: PVGIS satellite data were placed 39 minutes early.** PVGIS-SARAH3 values (Europe, Africa, the Red Sea,
+  the western Indian Ocean) are for a few minutes past the hour; every value was put on the half hour, which
+  skewed the day and dropped light near sunset, and SARAH-3 hourly series were refused. Each value now keeps its
+  own time. ERA5-based sites, including the example, were not affected.
+- **Smooth light within the day.** The hour's clearness is interpolated between neighbouring hours instead of
+  being held constant, so the curve no longer jumps at each hour boundary. Every hour keeps its total; designs
+  move by hundredths of a centimeter.
+- **Weather for any site.** The app fetches ten years of hourly ERA5 data from Open-Meteo for a new site and
+  builds a typical year (one real year per calendar month, chosen by the Finkelstein–Schafer statistic). The same
+  data PVGIS uses outside its satellite area; checked against PVGIS at six sites. PVGIS files stay the reference.
+  Python: `design(light="era5")`, CLI `--light era5`.
+- **Ten example reefs** with PVGIS typical years are bundled and work offline.
+
+**App**
+
+- **Simple mode** asks five questions in plain words; typical values fill the rest. **Expert mode** adds every
+  variable and four more views (coral response, month by month, other conditions, other canopy widths).
+- **The plan at a glance**: what to build and what the corals get under each kind of shading and with no shade.
+- **How much shade?** The same cloth at 30, 50, 70, 80 and 90 %: light, daily light, photosynthesis, energy
+  balance and time above saturation, with the published trials named. Choosing a row uses that rating.
+- **Coral numbers for the first days** (before the corals adjust to the shade) beside the adjusted ones.
+- **Through the day**: average day, clearest day, cloudiest day or any date; values under the pointer.
+- New check when the ERA5 route is used inside PVGIS's satellite area; exports add photosynthesis and P:R per day
+  and the sun-beam share.
+- Works in a frame without a scrollbar of its own (the app reports its height), and on phones.
+
+**Validation**
+
+- Engine against the 3-D Monte Carlo on five days through the deployment, five times a day: mean +0.005 of
+  open-water light on every day (docs/validation.md, section 4).
+- Light-data timing and the Open-Meteo comparison (section 5).
+
 ## 5.1.0 (not yet released)
 
 From a scientific review of v5.0.0 (19 Nov 2026). Designs are unchanged except where noted.

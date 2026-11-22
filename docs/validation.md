@@ -67,3 +67,56 @@ The tests enforce −0.02 − 2 SE ≤ error ≤ +0.04 + 2 SE for every point (`
   new ω₀ values were redone with 1,000,000 photons for this reason (build_tables.SPLIT_PHOTONS_OVERRIDE).
 - PVGIS: a fresh download for Sipaway is identical to the stored file; PVGIS time stamps are mid-hour UTC.
 - Field data (Sipaway, May 2025): see `docs/methods_paper_groundwork.md`.
+
+## 4. Days through the deployment (v5.2)
+
+The cases in section 2 are single sun positions. To check that nothing drifts as the season moves on, the example
+design (app defaults: Sipaway, Reef Star at 10 m, Kd 0.10, ω₀ 0.7, 80 % cloth 2.68 × 1.71 m and the canopy solved to
+match it, 1.28 × 1.36 m, both 0.75 m up) was followed through the deployment: five days from 28 April to 8 August,
+at 08:05, 10:05, 12:05, 14:05 and 16:05, each with that day's own sun position and direct and diffuse light
+(typical-year weather, from 22 % direct on 21 June to 86 % on 28 April), at four points (center; 0.45 m east,
+west and north). Fast engine against the 3-D backward Monte Carlo, 200,000 paths per point, flat sea
+(`python/examples/validate_days.py`; `shared/validation/engine_vs_mc_days.json`).
+
+| Day | Points | Mean error | Range |
+|---|---|---|---|
+| 28 April | 40 | +0.005 | -0.017 to +0.029 |
+| 18 May | 40 | +0.005 | -0.011 to +0.027 |
+| 21 June | 40 | +0.005 | -0.002 to +0.014 |
+| 24 July | 40 | +0.005 | -0.021 to +0.031 |
+| 8 August | 40 | +0.005 | -0.018 to +0.033 |
+
+All 200 points: mean +0.005 of open-water light (Monte Carlo standard error 0.002); cloth +0.004 (−0.001 to
++0.017), canopy +0.006 (−0.021 to +0.033). The largest errors are at the north edge under the canopy with a low
+morning sun (the engine is 0.03 too bright). Open-water light itself: engine ÷ Monte Carlo 0.990 (0.979–1.004).
+No trend with the date: the same small bias on every day, inside the limits of section 2.
+
+## 5. Light data: sources and timing (v5.2)
+
+**Which moment does a value describe?** On cloud-free days the light is symmetric about solar noon, so the centre
+of mass of the hourly values shows where they sit in time. With each value placed at its time stamp, the centre of
+mass fell 24–28 minutes before solar noon in eight PVGIS-ERA5 typical years (values centred half an hour after the
+stamp, as the files state), 9.5 minutes before in the PVGIS-SARAH3 typical year for Eilat (stated offset 9.2
+minutes), and 29–34 minutes after solar noon in six Open-Meteo ERA5 series (values are means of the hour before the
+stamp). The app places each value accordingly (methods, section 2). In v5.1 the SARAH-3 values were placed 39
+minutes early.
+
+**Is ERA5 from Open-Meteo as good as PVGIS?** Hourly global irradiance, 2014–2023, same hours
+(`shared/validation/light_sources.json`):
+
+| Site | PVGIS database | Hourly correlation | Mean difference | Diffuse share (PVGIS / Open-Meteo) |
+|---|---|---|---|---|
+| Sipaway, Philippines | ERA5 | 0.993 | +2.8 % | 0.34 / 0.33 |
+| Florida Keys | ERA5 | 0.996 | −0.2 % | 0.26 / 0.27 |
+| Lizard Island, Australia | ERA5 | 0.993 | +2.3 % | 0.29 / 0.28 |
+| Moorea | ERA5 | 0.999 | +0.7 % | 0.27 / 0.27 |
+| Eilat, Red Sea | SARAH-3 | daily 0.97 | +2.2 % | |
+| Mombasa, Kenya | SARAH-3 | daily 0.74 | −6.7 % | |
+
+Where PVGIS uses ERA5, the two are the same data to within the choice of grid cell (PVGIS also sets the hour of
+sunrise to zero when the sun is below the horizon at the start of the hour, which accounts for part of the small
+positive difference). Where PVGIS uses the SARAH-3 satellite record, the reanalysis follows day-to-day cloud less
+well (Mombasa) and a PVGIS file is the better choice. Light under a structure as a share of open water barely
+depends on the weather data (real years 2014–2023 changed it by at most 0.11 percentage points at Sipaway);
+absolute daily light and the coral metrics do.
+

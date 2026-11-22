@@ -240,7 +240,8 @@ def design(lat: float, lon: float, tz: float | None = None, start=(2025, 4, 28),
            robustness: bool = True, n_facets: int = 16, kd_series: dict | None = None, tide: "conditions.Tide | None" = None,
            fouling: "conditions.Fouling | None" = None) -> DesignResult:
     """Design a shade cloth and/or canopy for a coral area (see the browser app's help for every input).
-    light: "tmy" (download a PVGIS typical year), "example" (the bundled example site), "clearsky" (cloud-free model
+    light: "tmy" (download a PVGIS typical year), "era5" (download ten years of ERA5 hours from Open-Meteo and build a
+    typical year; any site, as the app does), "example" (the bundled example site), "clearsky" (cloud-free model
     light, no download), a (start_year, end_year) tuple for real hourly years, a path to a PVGIS CSV, or a
     surface.HourlyLight. Light data for a point more than surface.MATCH_KM from the site are refused.
     w0: water scattering used for the design; w0_range: the range shown with every result (default 0.5-0.9, the span of
@@ -255,6 +256,9 @@ def design(lat: float, lon: float, tz: float | None = None, start=(2025, 4, 28),
         h, label = surface.clear_sky_light(lat, lon), "Clear-sky estimate (no clouds; Haurwitz 1945)"
     elif light == "tmy":
         h = pvgis.fetch(lat, lon, "tmy"); label = f"PVGIS typical year ({h.database})"
+    elif light == "era5":
+        from . import openmeteo
+        h = openmeteo.fetch(lat, lon); label = f"{h.database} (Open-Meteo), months from {min(h.tmy_years)}-{max(h.tmy_years)}"
     elif isinstance(light, tuple):
         h = pvgis.fetch(lat, lon, "hourly", light[0], light[1]); label = f"PVGIS hourly {light[0]}-{light[1]}"
     else:

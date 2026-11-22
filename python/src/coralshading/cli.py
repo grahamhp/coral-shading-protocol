@@ -42,7 +42,7 @@ def main(argv=None) -> int:
     p.add_argument("--reduction", type=float, default=75.0, help="canopy target light reduction, percent")
     p.add_argument("--coral", default="typical")
     p.add_argument("--acclimate", choices=["time", "site", "shade", "none"], default="time")
-    p.add_argument("--light", default="tmy", help="tmy | example | clearsky | YEAR0-YEAR1 | path to a PVGIS CSV")
+    p.add_argument("--light", default="tmy", help="tmy (PVGIS) | era5 (Open-Meteo, any site) | example | clearsky | YEAR0-YEAR1 | path to a PVGIS CSV")
     p.add_argument("--spacing", type=float, default=0.05)
     p.add_argument("--noon-shift", type=float, default=0.0, help="shift solar noon, minutes (+ = later)")
     p.add_argument("--wind", type=float, help="wind speed at 10 m, m s-1 (default: from the light data)")

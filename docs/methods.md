@@ -1,6 +1,6 @@
 # Methods
 
-How the Coral Shading Protocol v5.1 computes light under a shade cloth or an opaque canopy. Every step names the
+How the Coral Shading Protocol v5.2 computes light under a shade cloth or an opaque canopy. Every step names the
 code that does it (Python reference `python/src/coralshading/`, identical TypeScript in `webapp/src/core/`).
 Full references with DOIs are in `shared/references.json` (each checked on CrossRef).
 
@@ -13,16 +13,48 @@ it (minutes) to match a light record whose clock is offset. *(solar.py)*
 
 ## 2. Light at the sea surface
 
-**Data.** PVGIS 5.3 hourly global (G) and diffuse (D) irradiance on a horizontal plane, in W m⁻², as a typical
-meteorological year (TMY) or real hours for chosen years (Huld et al. 2012). PVGIS chooses the database for the
-location (PVGIS-ERA5 where satellite data do not reach, e.g. the Philippines). Time stamps are UTC; TMY files
-state a time offset, which is applied. TMY days are re-dated onto each deployment day, and the sun is computed
-for the actual year. A typical year must have 8760 hours and an hourly series no gaps; blank lines are skipped.
-*(surface.parse_pvgis, hourly_window; pvgis.py downloads in Python)*
+**Data.** Hourly global (G) and diffuse (D) irradiance on a horizontal plane, in W m⁻², as a typical year or as
+real hours for chosen years. Three sources:
 
-**Within each hour** the hour's energy is spread over its 60 minutes in proportion to cos(zenith), so each hour
-keeps its total and no light falls before sunrise; the minute values are averaged onto 10-minute steps.
-*(surface.day_light)*
+- *PVGIS 5.3* (Huld et al. 2012), the reference. PVGIS chooses the database for the location: the SARAH-3
+  satellite record between about 65° W and 65° E (Europe, Africa, the Red Sea, the western Indian Ocean, the
+  eastern Caribbean) and the ERA5 reanalysis (Hersbach et al. 2020) elsewhere, including the Philippines, the
+  Pacific and the Americas west of about 65° W. Ten example reefs carry their PVGIS typical year with the app.
+  *(surface.parse_pvgis; pvgis.py downloads in Python; examples.py)*
+- *ERA5 from the Open-Meteo archive* (v5.2), for any site without a file: ten complete years of hourly values, from
+  which a typical year is built (below). Where PVGIS itself uses ERA5 the two agree hour by hour (validation,
+  section 5); inside the satellite area PVGIS follows clouds more closely and is the better choice for a final
+  design. *(surface.parse_open_meteo, surface.typical_year; app: ui/lightdata.ts; Python: openmeteo.py)*
+- A *clear-sky estimate* (below), only until one of the above is loaded.
+
+**Each value keeps its own time (v5.2).** ERA5 values are means of a clock hour (PVGIS stamps them hh:30 in hourly
+series, and hh:00 with a stated offset of 0.5 h in typical years; Open-Meteo stamps each mean at the end of its
+hour). SARAH-3 values are the irradiance at the satellite scan a few minutes after the hour (stamps such as hh:09;
+typical-year offset such as 0.153 h). Every value is used as the mean of the hour centred on its own time. Until
+v5.1 all values were placed on hh:30 hours, which put SARAH-3 data about 40 minutes early (and refused SARAH-3
+hourly series). Checked on clear days at ten sites: the light's centre of mass falls within a few minutes of solar
+noon with this placement (validation, section 5). *(HourlyLight.center_min; surface.hourly_window)*
+
+**Typical year from real years (v5.2).** For each calendar month one year is chosen and its hours are copied, the
+irradiance part of ISO 15927-4: the distribution of daily global irradiation in each candidate year-month is
+compared with all years of that month by the Finkelstein–Schafer statistic (mean absolute difference between the
+two cumulative distributions; Finkelstein & Schafer 1971); of the three closest years, the one whose monthly mean
+is nearest the all-year mean is taken. Days run from local solar midnight; 29 February is dropped. At six test
+sites the typical year's annual light is within 0.2–1.8 % of the ten-year mean (monthly within 2.6–5.4 %) before the
+mean rule, which tightens the monthly means further. *(surface.typical_year)*
+
+TMY days are re-dated onto each deployment day, and the sun is computed for the actual year. A typical year must
+have 8760 hours and an hourly series no gaps; blank lines are skipped.
+
+**Within each hour (v5.2)** the light follows cos(zenith) times the hour's clearness (irradiance ÷ mean
+cos(zenith)), which is interpolated linearly in time between the centres of neighbouring hours and then rescaled
+so that each hour keeps its total exactly; global and direct irradiance are treated alike, and no light falls
+before sunrise. Hours without light are not interpolated towards (PVGIS-ERA5 gives zero for the hour of sunrise
+when the sun is below the horizon at its start). Until v5.1 the clearness was constant within each hour, which made
+the light jump at every hour boundary: on a cloud-free day the largest second difference between 10-minute steps
+from 07:00 to 17:00 fell from 98 to 8.5 µmol m⁻² s⁻¹. Hour totals, daily light and the designs are unchanged (the
+example canopy by 0.04 cm, period light by 0.02 percentage points). The minute values are averaged onto 10-minute
+steps. *(surface.day_light)*
 
 **Timing guard.** An hour may hold at most the light that reaches a horizontal plane above the atmosphere for the
 sun computed in that hour, 1361 W m⁻² × [1 + 0.033 cos(2π·day/365)] × mean cos(zenith) (hourly clearness index ≤ 1).
@@ -31,7 +63,7 @@ reported, instead of being squeezed into the few minutes the sun is up. In the e
 reaches 0.73 of this limit, so the guard never acts there. *(surface.day_light: light_total, light_dropped)*
 
 **Light data must belong to the site.** Light data for a point more than 50 km from the site are not used. The app
-then uses a clear-sky estimate for the site until PVGIS data are loaded, and loading a PVGIS file for another place
+then looks for a bundled example within 50 km, then fetches ERA5 data for the site, and shows a clear-sky estimate until they arrive; loading a PVGIS file for another place
 moves the site to the file's location; the Python package refuses such data with a message. *(surface.MATCH_KM)*
 
 **Clear-sky estimate.** Global irradiance G = 1098 cos z exp(−0.059 / cos z) W m⁻² (Haurwitz 1945; constants as in
@@ -187,6 +219,14 @@ over the deployment ÷ open-water daily light summed.
 
 ## 7. Corals
 
+- **First days and once adjusted (v5.2).** The app reports the coral metrics twice when the chosen acclimation
+  lets Ek follow the shade ("over time", "the shade"): *first days*, with Ek as acclimated to open water at the
+  coral depth (the corals as they are when the shade goes up), and *once adjusted*, with the chosen acclimation.
+  Reason: with Ek proportional to the light and Pmax and R held fixed, an adjusted coral recovers its daily
+  photosynthesis almost fully under any shade, so the adjusted P:R says little about how much shade is too much.
+  The first-days values are the immediate effect of the shade; the adjusted values are on the optimistic side,
+  because real corals in low light also change Pmax and respiration (Porter et al. 1984). The shade-rating table
+  uses the first-days values. *(ui/compute.ts: bioFirst; in Python: pe.Coral(acclimate="site"))*
 - **Photosynthesis.** P_gross = Pmax tanh(E / Ek) (Jassby & Platt 1976; Chalker 1981). Daily gross
   photosynthesis in Pmax-hours = ∫ tanh(E/Ek) dt; "photosynthesis, % of unshaded" = that ÷ the same for
   open water at the same depth. Hours above Ek; light above Ek = ∫ max(E − Ek, 0) dt. Daily P:R =
@@ -226,4 +266,8 @@ over the deployment ÷ open-water daily light summed.
 - With a tide, the water's attenuation per meter is held for each day; with Kd by date, ω₀ is held.
 - Flat panels only; no light reflected from the panel undersides or the seabed (in the 3-D Monte Carlo a sand
   seabed of albedo 0.4 added 0.003–0.013 to the noon under/open ratio under the example canopy); the coral area is flat.
-- P:R uses dark respiration; light-enhanced respiration is not included.
+- P:R uses dark respiration; light-enhanced respiration is not included. Acclimation changes Ek only; Pmax and
+  respiration are held fixed (section 7).
+- The tool computes light and photosynthesis. It does not model temperature, bleaching or survival. Published
+  trials found less bleaching under 30 %, 50 % and 75 % shade (Butcherine et al. 2023; Coelho et al. 2017; review:
+  Tagliafico et al. 2022); how much shade a site needs is not settled.
