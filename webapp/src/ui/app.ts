@@ -12,6 +12,7 @@ import { HOVER } from "./charts.ts";
 import { tmyUrl, hourlyUrl, importText, readFile } from "./pvgis.ts";
 import { fetchTypicalYear, cacheGet, cachePut, ERA5_LABEL } from "./lightdata.ts";
 import { resultsHtml, dayIndex, fmt, dstr, MON } from "./results.ts";
+import { stages, type RunMsg } from "./runner.ts";
 
 declare const L: any;   // Leaflet (bundled UMD build)
 
@@ -148,25 +149,61 @@ let last: Results | null = null;
 let runId = 0, worker: Worker | null = null, busy = false, guess: number | undefined;
 
 // ------------------------------------------------------------------ worker
+// The calculation runs in a background worker. Some windows refuse one (a sandboxed preview, for example); the page
+// then runs the same stages itself, pausing between them so the screen can update.
+let inline = false, workerSeen = false, pending: RunMsg | null = null;
+
+function onWorkerMessage(m: { type: string; id: number; message?: string; result?: Results }) {
+  if (m.id !== runId) return;
+  if (m.type === "error") { busy = false; setStatus(`⚠ ${m.message}`, true); return; }
+  last = m.result as Results;
+  const dyn = last.scenarios.find((s) => s.kind === "dynamic");
+  if (dyn && !state.canopy) guess = dyn.panel.lx;
+  const done = last.level === "robust" && (ui.mode !== "expert" || !dyn || last.canopyOptions !== undefined);
+  if (done) busy = false;
+  renderResults();
+  const slow = inline && !done ? " The page may pause while it works." : "";
+  setStatus((last.level === "preview" ? "Quick preview · refining…"
+    : !done ? `Full resolution · ${last.points.length / 2} points × ${last.days.length} days · checking other conditions…`
+    : `Full resolution · ${(last.ms / 1000).toFixed(1)} s · ${last.points.length / 2} points × ${last.days.length} days`) + slow);
+}
+
 function startWorker() {
-  if (worker) worker.terminate();
-  const url = URL.createObjectURL(new Blob([CSP_BOOT.workerSource], { type: "text/javascript" }));
-  worker = new Worker(url);
-  worker.postMessage({ type: "init", tables: CSP_BOOT.tables, presets: CSP_BOOT.presets, light });
-  worker.onmessage = (ev: MessageEvent) => {
-    const m = ev.data;
-    if (m.id !== runId) return;
-    if (m.type === "error") { busy = false; setStatus(`⚠ ${m.message}`, true); return; }
-    last = m.result as Results;
-    const dyn = last.scenarios.find((s) => s.kind === "dynamic");
-    if (dyn && !state.canopy) guess = dyn.panel.lx;
-    const done = last.level === "robust" && (ui.mode !== "expert" || !dyn || last.canopyOptions !== undefined);
-    if (done) busy = false;
-    renderResults();
-    setStatus(last.level === "preview" ? "Quick preview · refining…"
-      : !done ? `Full resolution · ${last.points.length / 2} points × ${last.days.length} days · checking other conditions…`
-      : `Full resolution · ${(last.ms / 1000).toFixed(1)} s · ${last.points.length / 2} points × ${last.days.length} days`);
+  if (worker) { worker.terminate(); worker = null; }
+  if (inline) return;
+  try {
+    const url = URL.createObjectURL(new Blob([CSP_BOOT.workerSource], { type: "text/javascript" }));
+    const w = new Worker(url);
+    w.onmessage = (ev: MessageEvent) => { workerSeen = true; onWorkerMessage(ev.data); };
+    // a worker that fails before it ever answers was blocked while loading: carry on without one
+    w.onerror = (ev) => { if (!workerSeen) { ev.preventDefault?.(); goInline(); } };
+    w.postMessage({ type: "init", tables: CSP_BOOT.tables, presets: CSP_BOOT.presets, light });
+    worker = w;
+  } catch { goInline(); }
+}
+
+function goInline() {
+  if (inline) return;
+  inline = true;
+  if (worker) { try { worker.terminate(); } catch { /* already gone */ } worker = null; }
+  if (busy && pending && pending.id === runId) runInline(pending);
+}
+
+function runInline(msg: RunMsg) {
+  const it = stages(msg, { tables: CSP_BOOT.tables, presets: CSP_BOOT.presets, light });
+  const step = () => {
+    if (msg.id !== runId) return;       // newer inputs arrived: drop this run
+    try {
+      const r = it.next();
+      if (r.done) return;
+      onWorkerMessage({ type: "result", id: msg.id, result: r.value });
+    } catch (e) {
+      onWorkerMessage({ type: "error", id: msg.id, message: e instanceof Error ? e.message : String(e) });
+      return;
+    }
+    window.setTimeout(step, 30);
   };
+  window.setTimeout(step, 30);
 }
 
 let timer: number | undefined;
@@ -177,8 +214,11 @@ function schedule() {
     if (busy) startWorker();          // drop stale work
     busy = true;
     setStatus("Computing…");
-    worker!.postMessage({ type: "run", id: runId, inputs: JSON.parse(JSON.stringify(state)), full: true, guess, expert: ui.mode === "expert" });
-  }, 120);
+    const msg: RunMsg = { type: "run", id: runId, inputs: JSON.parse(JSON.stringify(state)), full: true, guess, expert: ui.mode === "expert" };
+    pending = msg;
+    if (!inline && !worker) startWorker();
+    if (worker) worker.postMessage(msg); else runInline(msg);
+  }, inline ? 350 : 120);
 }
 
 function setStatus(text: string, err = false) { const s = $("#status"); s.textContent = text; s.classList.toggle("err", err); }
@@ -322,9 +362,9 @@ function initMap() {
       if (loaded > 0 || failed < 4 || el.querySelector(".map-off")) return;
       const d = document.createElement("div"); d.className = "map-off"; d.style.zIndex = "1000";
       d.textContent = "Map tiles could not load. Type coordinates below, or choose an example reef.";
-      el.appendChild(d);
+      el.appendChild(d); el.classList.add("no-tiles");
     };
-    sat.on("tileload", () => { loaded++; el.querySelector(".map-off")?.remove(); });
+    sat.on("tileload", () => { loaded++; el.querySelector(".map-off")?.remove(); el.classList.remove("no-tiles"); });
     sat.on("tileerror", () => { failed++; note(); });
   } catch { /* offline: typed coordinates still work */ }
 }
@@ -721,7 +761,7 @@ function boot() {
   window.addEventListener("online", () => { if (!map) renderLeft(); autoFetch(); });
   renderLeft(); refreshSiteInfo(); startWorker(); schedule();
   // for testing and for power users in the browser console
-  (window as unknown as Record<string, unknown>).__csp = { state, ui, toggle: onToggle, exportAs: doExport, results: () => last, render: renderResults, rerun: schedule, setSite, useExample, light: () => light };
+  (window as unknown as Record<string, unknown>).__csp = { state, ui, toggle: onToggle, exportAs: doExport, results: () => last, inline: () => inline, render: renderResults, rerun: schedule, setSite, useExample, light: () => light };
 }
 
 boot();

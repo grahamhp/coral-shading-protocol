@@ -73,6 +73,7 @@ td .sub,th .sub{margin:0;font-weight:400}
 .pair{display:inline-flex;gap:4px;align-items:center}.pair .inp input{width:54px}
 .pair.dt input{font-size:13px;padding:4px 6px}.pair.dt input[type=date]{width:128px}.pair.dt input[type=time]{width:82px}
 .map{height:170px;border-radius:8px;overflow:hidden;background:linear-gradient(135deg,#a9cfe0,#6fa8c2 55%,#3d7f9e);position:relative;margin-top:8px;z-index:0}
+.map.no-tiles .leaflet-control-attribution{display:none}
 .map-off{position:absolute;inset:auto 8px 8px 8px;font-size:12px;color:#083344;background:rgba(255,255,255,.85);padding:4px 8px;border-radius:6px}
 .pin{width:16px!important;height:16px!important;background:var(--coral);border:2px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 1px 3px rgba(0,0,0,.3)}
 

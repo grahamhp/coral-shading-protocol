@@ -38,6 +38,12 @@ Made ready to show at Reef Futures 2026. Includes everything in 5.1.0 below.
   open-water light on every day (docs/validation.md, section 4).
 - Light-data timing and the Open-Meteo comparison (section 5).
 
+**Robustness**
+
+- **Runs where a background worker is refused.** Some windows block the worker the app computes in (a sandboxed
+  file preview, for example), which left the page on "Computing...". The page now runs the same calculation stages
+  itself in that case, with identical results; it may pause briefly while it works.
+
 ## 5.1.0 (not yet released)
 
 From a scientific review of v5.0.0 (19 Nov 2026). Designs are unchanged except where noted.

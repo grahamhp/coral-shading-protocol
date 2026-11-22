@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import { lightFromJson } from "../src/core/surface.ts";
 import { compute, computeRobustness, computeClothOptions, type Inputs, type Data } from "../src/ui/compute.ts";
 import { resultsHtml, type Ctx } from "../src/ui/results.ts";
+import { stages } from "../src/ui/runner.ts";
 
 const read = (p: string) => JSON.parse(readFileSync(new URL(`../../shared/${p}`, import.meta.url), "utf8"));
 const EX = read("examples/sipaway.json");
@@ -55,4 +56,19 @@ test("one kind of shading, a coral without respiration data and a preview all re
     assert.equal(html.includes("How much shade?"), scenario === "constant");
     assert.equal(html.includes("Energy balance (P:R)"), preset === "typical");
   }
+});
+
+test("the calculation stages give the same plan with or without a background worker", () => {
+  // the worker and the page (where a worker is refused) both walk these stages; the last one is the finished result
+  const levels: string[] = [];
+  let lastR: ReturnType<typeof compute> | null = null;
+  for (const r of stages({ type: "run", id: 1, inputs: base, full: true, expert: false }, data)) { levels.push(r.level); lastR = r; }
+  assert.deepEqual(levels, ["preview", "full", "full", "robust"]);
+  const direct = compute(base, data, "full", compute(base, data, "preview").scenarios[1]!.panel.lx);
+  for (const k of [0, 1]) {
+    assert.equal(lastR!.scenarios[k]!.panel.lx, direct.scenarios[k]!.panel.lx);
+    assert.equal(lastR!.scenarios[k]!.T, direct.scenarios[k]!.T);
+    assert.ok(lastR!.scenarios[k]!.robustness!.length > 0);
+  }
+  assert.equal(lastR!.clothOptions!.length, 5);
 });
