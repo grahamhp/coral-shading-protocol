@@ -68,13 +68,19 @@ export function resultsHtml(c: Ctx): string {
   // coral metrics: "first" = before the corals adjust to the shade (Ek as in open water at this depth); "adj" = with the chosen acclimation
   const two = main.bioFirst !== null;
   const F = (s: ScenarioOut) => s.bioFirst ?? s.bio, oF = r.open.bioFirst ?? r.open.bio;
-  const accl = ({ time: "once the corals have adjusted to the shade", shade: "for corals adjusted to the shade", site: "for corals adjusted to open water at this depth", none: "with Ek as measured" } as Record<string, string>)[preset?.Ek_Emax ? state.coral.acclimate : "none"]!;
+  // how far the corals adjust (share of the way from the Ek at this depth to the Ek matched to the shade)
+  const mode = preset?.Ek_Emax ? state.coral.acclimate : "none";
+  const ext = mode === "time" || mode === "shade" ? Math.min(1, Math.max(0, state.coral.extent ?? 1)) : 1;
+  const part = ext < 1, way = `${Math.round(100 * ext)} % of the way to the shade`;
+  const accl = ext <= 0 ? "for corals that do not adjust to the shade"
+    : ({ time: part ? `once the corals have adjusted ${way}` : "once the corals have adjusted to the shade", shade: part ? `for corals adjusted ${way}` : "for corals adjusted to the shade",
+      site: "for corals adjusted to open water at this depth", none: "with Ek as measured" } as Record<string, string>)[mode]!;
   const kpis = [
     kp("Light at the corals", "kpiLight", both((s) => pct(100 * s.T)), `of unshaded light at ${fmt(state.depth, 1)} m${main.w0Range ? `, likely ${rangeOf(main)}` : ""}`),
     kp("Daily light", "kpiDli", both((s) => fmt(s.dliMean, 1)), `mol m⁻² d⁻¹. Unshaded at this depth: ${fmt(open, 1)}`),
     kp(two ? "Photosynthesis, first days" : "Photosynthesis", "kpiPhoto", both((s) => pct(100 * F(s).grossVsOpen!)), two ? "of unshaded, before the corals adjust to the shade" : `of unshaded, ${accl}`),
     hasR ? kp("Energy balance (P:R)", "kpiPR", both((s) => (two ? `${fmt(F(s).prDaily!, 2)}<span class="arrow">to</span>${fmt(s.bio.prDaily!, 2)}` : fmt(s.bio.prDaily!, 2))),
-      `${two ? "First days, then once adjusted to the shade. " : ""}Above 1, photosynthesis covers respiration. Unshaded: ${fmt(oF.prDaily ?? NaN, 2)}`)
+      `${two ? `First days, then once adjusted${part ? ` (${way})` : " to the shade"}. ` : ""}Above 1, photosynthesis covers respiration. Unshaded: ${fmt(oF.prDaily ?? NaN, 2)}`)
       : kp("Time above saturation", "kpiSat", both((s) => `${fmt(F(s).hoursSaturated ?? NaN, 1)} h`), `per day with more light than photosynthesis can use${two ? ", first days" : ""}. Unshaded: ${fmt(oF.hoursSaturated ?? NaN, 1)} h`),
   ];
   const kpiLegend = r.scenarios.length > 1 ? `<div class="legend lead-key">${r.scenarios.map((s) => `<span>${dot(color(s))}${nameOf(s)}</span>`).join("")}</div>` : "";
@@ -107,10 +113,12 @@ export function resultsHtml(c: Ctx): string {
     <tr class="grp"><td colspan="${cols.length + 2}">What it means for the corals <span class="sub">(${esc(preset?.label ?? "")})</span></td></tr>
     ${row(two ? "Photosynthesis, first days" : "Photosynthesis", two ? "share of unshaded, before the corals adjust" : "share of unshaded", (s) => pct(100 * F(s).grossVsOpen!), "100 %")}
     ${hasR ? row(two ? "Energy balance (P:R), first days" : "Energy balance (P:R)", "daily photosynthesis ÷ respiration", (s) => prCell(F(s).prDaily!), fmt(oF.prDaily ?? NaN, 2)) : ""}
-    ${hasR && two ? row("Energy balance, once adjusted", "if the corals adjust fully to the shade", (s) => prCell(b(s, "prDaily")), fmt(r.open.bio.prDaily ?? NaN, 2)) : ""}
+    ${hasR && two ? row("Energy balance, once adjusted", part ? `if the corals adjust ${way}` : "if the corals adjust fully to the shade", (s) => prCell(b(s, "prDaily")), fmt(r.open.bio.prDaily ?? NaN, 2)) : ""}
     ${row(two ? "Time above saturation, first days" : "Time above saturation", "hours per day with more light than photosynthesis can use", (s) => `${fmt(F(s).hoursSaturated ?? NaN, 1)} h`, `${fmt(oF.hoursSaturated ?? NaN, 1)} h`)}
     </tbody></table></div>
-    ${two ? `<p class="sub">“First days”: the corals are still adjusted to the light at this depth. In the model they adjust to the shade within about a week (only the saturation light Ek changes; maximum photosynthesis and respiration are held fixed), so the adjusted values are on the optimistic side.</p>` : ""}
+    ${two ? `<p class="sub">“First days”: the corals are still adjusted to the light at this depth. ${part
+      ? `“Once adjusted” assumes they then move ${way} within about a week. That share is an assumption you can change under Which coral: full adjustment within 5 to 10 days has been measured in the laboratory, and a low share keeps the plan from leaning on it. Only the saturation light Ek changes in the model; maximum photosynthesis and respiration are held fixed.`
+      : "In the model they adjust to the shade within about a week (only the saturation light Ek changes; maximum photosynthesis and respiration are held fixed), so the adjusted values are on the optimistic side."}</p>` : ""}
     ${hasR ? "" : `<p class="sub">Energy balance needs respiration data, which the sources for this coral lack.</p>`}</div>`;
 
   // ------------------------------------------------------------ light across the coral area (plan view)
@@ -193,7 +201,7 @@ export function resultsHtml(c: Ctx): string {
   if (hasR) {
     const low = r.scenarios.filter((s) => F(s).prDaily! < 1), lowAdj = r.scenarios.filter((s) => s.bio.prDaily! < 1);
     if (lowAdj.length) chk("warn", "CHECK", `Energy balance below 1 even ${accl} (${lowAdj.map((s) => `${nameOf(s).toLowerCase()} P:R ${fmt(s.bio.prDaily!, 2)}`).join(", ")})`,
-      `For ${esc(preset?.label ?? "this coral")}, modeled daily photosynthesis does not cover respiration under this much shade at ${state.depth} m. Less shade (see the ratings table) keeps more of a margin.`);
+      `For ${esc(preset?.label ?? "this coral")}, modeled daily photosynthesis does not cover respiration under this much shade at ${state.depth} m. Less shade (see the ratings table) keeps more of a margin.${part && ext > 0 ? ` This uses the adjustment set under Which coral (${way}); with more adjustment the value is higher.` : ""}`);
     else if (two && low.length) chk("note", "NOTE", `In the first days the energy balance is below 1 (${low.map((s) => `${nameOf(s).toLowerCase()} P:R ${fmt(F(s).prDaily!, 2)}`).join(", ")}; unshaded ${fmt(oF.prDaily ?? NaN, 2)})`,
       `Until the corals adjust to the shade, modeled photosynthesis covers less than their respiration (${esc(preset?.label ?? "coral")}). Corals adjust to lower light over days and can also feed; whether a temporary deficit matters during heat stress is an open question. The ratings table shows the trade-off with less shade.`);
   }
@@ -233,7 +241,7 @@ export function resultsHtml(c: Ctx): string {
     const mrow = (label: string, idx: number[], cls = "") => `<tr${cls ? ` class="${cls}"` : ""}><td>${label}<br><span class="sub">${idx.length} days</span></td><td>${fmt(sumAt(r.open.dayDli, idx) / idx.length, 1)}</td>${r.scenarios.map((s) => {
       const dl = dayLight(s); const share = sumAt(dl, idx) / sumAt(r.open.dayDli, idx);
       return `<td>${fmt(sumAt(dl, idx) / idx.length, 1)}<br><span class="sub">${pct(100 * share)}</span></td><td>${pct(100 * mean(idx.map((i) => s.bioDaily.grossVsOpen[i]!)))}${s.bioDaily.prDaily ? `<br><span class="sub">P:R ${fmt(mean(idx.map((i) => s.bioDaily.prDaily![i]!)), 2)}</span>` : ""}</td>`; }).join("")}</tr>`;
-    const monthly = `<div class="card"><h2>Month by month</h2><p class="sub">Daily light (mol m⁻² d⁻¹) with its share of open water, and photosynthesis as a share of unshaded${hasR ? " with the energy balance" : ""}. ${state.coral.acclimate === "time" ? "Corals adjust to the shade over the first days, so early values differ." : ""}</p>
+    const monthly = `<div class="card"><h2>Month by month</h2><p class="sub">Daily light (mol m⁻² d⁻¹) with its share of open water, and photosynthesis as a share of unshaded${hasR ? " with the energy balance" : ""}. ${mode === "time" && ext > 0 ? "Corals adjust to the shade over the first days, so early values differ." : ""}</p>
       <div class="tscroll"><table class="t"><thead><tr><th>Month</th><th>Open water</th>${r.scenarios.map((s) => `<th>${dot(color(s))}${s.kind === "constant" ? "Constant" : "Dynamic"}: light</th><th>photosynthesis</th>`).join("")}</tr></thead>
       <tbody>${groups.map((g) => mrow(g.key, g.idx)).join("")}${groups.length > 1 ? mrow("Whole deployment", r.days.map((_, i) => i), "tot") : ""}</tbody></table></div></div>`;
     // sensitivity

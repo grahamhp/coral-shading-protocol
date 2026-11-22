@@ -22,7 +22,7 @@ def main(argv=None) -> int:
     p.add_argument("--tz", type=float, help="UTC offset in hours (default: longitude / 15)")
     p.add_argument("--start", type=_date, required=True); p.add_argument("--end", type=_date, required=True)
     p.add_argument("--target", default="reef_star", help="reef_star | table | rope | rect:LXxLY | circle:D")
-    p.add_argument("--depth", type=float, default=10.0); p.add_argument("--height", type=float, default=0.75)
+    p.add_argument("--depth", type=float, default=5.0); p.add_argument("--height", type=float, default=0.75)
     p.add_argument("--kd", type=float, default=0.10, help="Kd (PAR), m-1")
     p.add_argument("--w0", type=float, default=0.7, help="water scattering used for the design (0.3-0.95)")
     p.add_argument("--w0-range", default="0.5-0.9", help="range of w0 shown with every result, LOW-HIGH")
@@ -38,10 +38,12 @@ def main(argv=None) -> int:
                    help="cloth fouling timeline: transmission clean and fouled, days to foul fully, days between cleanings (0 = never)")
     p.add_argument("--scenario", choices=["constant", "dynamic", "both"], default="both")
     p.add_argument("--no-sync", action="store_true", help="size the canopy for --reduction instead of matching the cloth")
-    p.add_argument("--rating", type=float, default=80.0, help="cloth shade rating, percent")
-    p.add_argument("--reduction", type=float, default=75.0, help="canopy target light reduction, percent")
+    p.add_argument("--rating", type=float, default=50.0, help="cloth shade rating, percent")
+    p.add_argument("--reduction", type=float, default=50.0, help="canopy target light reduction, percent")
     p.add_argument("--coral", default="typical")
     p.add_argument("--acclimate", choices=["time", "site", "shade", "none"], default="time")
+    p.add_argument("--acclimation-extent", type=float, default=0.25,
+                   help="how far the corals adjust to the shade, 0-1 (default 0.25, a cautious assumption; 1 = fully)")
     p.add_argument("--light", default="tmy", help="tmy (PVGIS) | era5 (Open-Meteo, any site) | example | clearsky | YEAR0-YEAR1 | path to a PVGIS CSV")
     p.add_argument("--spacing", type=float, default=0.05)
     p.add_argument("--noon-shift", type=float, default=0.0, help="shift solar noon, minutes (+ = later)")
@@ -90,7 +92,7 @@ def main(argv=None) -> int:
         foul = conditions.Fouling(tau_clean=tc, tau_fouled=tf, days_to_foul=dtf, clean_every=int(every))
     r = D.design(a.lat, a.lon, tz=tz, start=a.start, end=a.end, target=tgt, depth=a.depth, height=a.height, kd=a.kd, w0=w0,
                  w0_range=(lo, hi), scenario=a.scenario, sync=not a.no_sync, cloth_rating=a.rating, dynamic_reduction=a.reduction,
-                 coral=a.coral, acclimate=a.acclimate, light=light, spacing=a.spacing, noon_shift=a.noon_shift, wind=a.wind,
+                 coral=a.coral, acclimate=a.acclimate, acclimation_extent=a.acclimation_extent, light=light, spacing=a.spacing, noon_shift=a.noon_shift, wind=a.wind,
                  kd_series=kds, tide=tide, fouling=foul, tau_clean=foul.tau_clean if foul else None)
     print(r.summary())
     if a.out:

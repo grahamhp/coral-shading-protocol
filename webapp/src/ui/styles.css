@@ -62,6 +62,7 @@ td .sub,th .sub{margin:0;font-weight:400}
 .field>label{min-width:0}
 .field .sel{max-width:min(100%,214px)}
 .field>:last-child{justify-self:end;max-width:100%;min-width:0}
+.field.stack{grid-template-columns:minmax(0,1fr);gap:6px}.field.stack>:last-child{justify-self:start}
 .val{font-variant-numeric:tabular-nums;font-weight:650}
 .lab{margin:12px 0 6px}
 .row{display:flex;gap:8px;align-items:center;margin-top:8px}.row.wrap{flex-wrap:wrap}

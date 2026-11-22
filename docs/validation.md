@@ -71,7 +71,7 @@ The tests enforce −0.02 − 2 SE ≤ error ≤ +0.04 + 2 SE for every point (`
 ## 4. Days through the deployment (v5.2)
 
 The cases in section 2 are single sun positions. To check that nothing drifts as the season moves on, the example
-design (app defaults: Sipaway, Reef Star at 10 m, Kd 0.10, ω₀ 0.7, 80 % cloth 2.68 × 1.71 m and the canopy solved to
+design (the app's starting values until 22 Nov 2026: Sipaway, Reef Star at 10 m, Kd 0.10, ω₀ 0.7, 80 % cloth 2.68 × 1.71 m and the canopy solved to
 match it, 1.28 × 1.36 m, both 0.75 m up) was followed through the deployment: five days from 28 April to 8 August,
 at 08:05, 10:05, 12:05, 14:05 and 16:05, each with that day's own sun position and direct and diffuse light
 (typical-year weather, from 22 % direct on 21 June to 86 % on 28 April), at four points (center; 0.45 m east,
@@ -90,6 +90,12 @@ All 200 points: mean +0.005 of open-water light (Monte Carlo standard error 0.00
 +0.017), canopy +0.006 (−0.021 to +0.033). The largest errors are at the north edge under the canopy with a low
 morning sun (the engine is 0.03 too bright). Open-water light itself: engine ÷ Monte Carlo 0.990 (0.979–1.004).
 No trend with the date: the same small bias on every day, inside the limits of section 2.
+
+**The starting design (22 Nov 2026).** The app now starts from a 50 % cloth and corals at 5 m. For that design at
+the example site (cloth 2.68 × 1.71 m; matched canopy 0.65 × 1.35 m; Kd 0.10, ω₀ 0.7), `mc_check()` on 28 April
+at 3 h before noon, noon and 3 h after, at the center and the east and west edges (18 points, 200,000 paths each):
+engine − Monte Carlo = +0.005 on average, from −0.005 to +0.013 of open-water light, inside the range of
+section 2. *(shared/validation/mc_starting_design.json)*
 
 ## 5. Light data: sources and timing (v5.2)
 

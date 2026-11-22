@@ -94,6 +94,17 @@ test("v5.1: fouling timeline, Kd by date, tide, acclimation over time and w0 cal
   V.acclimation_time.ek.forEach((x: number, i: number) => assert.ok(close(bt.ek[i]!, x), `ek mean ${i}`));
   V.acclimation_time.ek_day2.forEach((x: number, i: number) => assert.ok(close(bt.ekDays[2]![i]!, x), `ek day 2 ${i}`));
   for (const [k0, x] of Object.entries(V.acclimation_time.mean)) { const k = camel(k0); assert.ok(close(bt.mean[k]!, x as number), `time ${k}`); }
+  // partial adjustment (extent 0.25): over time, static, and extent 0 (which equals "site")
+  const AP = V.acclimation_partial;
+  const bp = biology(dyn, coralFromPreset(PR, "typical", "time", AP.extent));
+  AP.ek.forEach((x: number, i: number) => assert.ok(close(bp.ek[i]!, x), `partial ek mean ${i}`));
+  AP.ek_day2.forEach((x: number, i: number) => assert.ok(close(bp.ekDays[2]![i]!, x), `partial ek day 2 ${i}`));
+  for (const [k0, x] of Object.entries(AP.mean)) { const k = camel(k0); assert.ok(close(bp.mean[k]!, x as number), `partial ${k}`); }
+  const bps = biology(dyn, coralFromPreset(PR, "typical", "shade", AP.extent));
+  AP.shade_ek.forEach((x: number, i: number) => assert.ok(close(bps.ek[i]!, x), `partial shade ek ${i}`));
+  for (const [k0, x] of Object.entries(AP.shade_mean)) { const k = camel(k0); assert.ok(close(bps.mean[k]!, x as number), `partial shade ${k}`); }
+  const b0 = biology(dyn, coralFromPreset(PR, "typical", "time", 0)), bs = biology(dyn, coralFromPreset(PR, "typical", "site"));
+  for (const [k0, x] of Object.entries(AP.none_mean)) { const k = camel(k0); assert.ok(close(b0.mean[k]!, x as number) && b0.mean[k] === bs.mean[k], `extent 0 ${k}`); }
   // w0 calibration
   const C = V.calibration, cp = { ...C.panel, rotDeg: C.panel.rot_deg };
   for (const [res, ds, w] of [[C.result, C.diffuse, C.wind], [C.result_wind, 0.25, 6.0]] as const) {

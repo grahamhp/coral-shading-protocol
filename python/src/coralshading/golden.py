@@ -144,6 +144,9 @@ def golden_scenarios() -> dict:
     float_pan = _Panel(lx=1.6, ly=1.4, height=1.8, tau=0.0)
     var2 = sc.run_period(sv, shallow, [float_pan], X, Y, days[:1])
     bt = sc.biology(dyn, pe.Coral.preset("typical", acclimate="time"))
+    bp = sc.biology(dyn, pe.Coral.preset("typical", acclimate="time", extent=0.25))
+    bps = sc.biology(dyn, pe.Coral.preset("typical", acclimate="shade", extent=0.25))
+    bp0 = sc.biology(dyn, pe.Coral.preset("typical", acclimate="time", extent=0.0))
     cal_pan = _Panel(lx=1.2, ly=1.2, height=0.75, tau=0.0)
     cal = sc.w0_from_reading(0.12, cal_pan, (0.1, 0.0), 0.21, 10.0, (2025, 5, 22), 700.0, ex["lat"], ex["lon"], ex["utc_offset_h"], 0.3, 0.0)
     cal_w = sc.w0_from_reading(0.12, cal_pan, (0.1, 0.0), 0.21, 10.0, (2025, 5, 22), 700.0, ex["lat"], ex["lon"], ex["utc_offset_h"], 0.25, 6.0)
@@ -156,6 +159,8 @@ def golden_scenarios() -> dict:
                var_surface=dict(water=shallow.__dict__, panel=float_pan.__dict__, dli_day0=var2.dli()[0].tolist(),
                                 dli_open=var2.dli_open().tolist(), sunlit_day0=var2.direct_sun_hours()[0].tolist()),
                acclimation_time=dict(ek=bt["ek"].tolist(), ek_day2=bt["ek_days"][2].tolist(), mean=bt["mean"]),
+               acclimation_partial=dict(extent=0.25, ek=bp["ek"].tolist(), ek_day2=bp["ek_days"][2].tolist(), mean=bp["mean"],
+                                        shade_ek=bps["ek"].tolist(), shade_mean=bps["mean"], none_mean=bp0["mean"]),
                calibration=dict(ratio=0.12, panel=cal_pan.__dict__, point=[0.1, 0.0], kd=0.21, depth=10.0, date=[2025, 5, 22], minute=700.0,
                                 diffuse=0.3, wind=0.0, result=cal, result_wind=cal_w))
     ex_c = dict(noon=0.30, side=0.36, ratio=0.30 / 0.36)

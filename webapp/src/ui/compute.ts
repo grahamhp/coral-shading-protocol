@@ -30,7 +30,7 @@ export interface Inputs {
   canopy?: { lx: number; ly: number; cx: number; cy: number; rot: number } | null;   // null = solve
   noonShift: number;                   // minutes
   wind: number | null;                 // null = from the light data
-  coral: { preset: string; acclimate: Acclimation; ek?: number; rOverPg?: number | null };
+  coral: { preset: string; acclimate: Acclimation; extent?: number; ek?: number; rOverPg?: number | null };   // extent: how far the corals adjust to the shade, 0-1 (1 when absent)
   gridSpacing: number;                 // m, full resolution
 }
 
@@ -128,9 +128,9 @@ function summarizeScenario(kind: "constant" | "dynamic", pan: Panel, r: PeriodRe
 const now = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
 
 /** The coral before it adjusts to the shade: Ek as acclimated to open water at this depth. Null when the chosen
- *  acclimation is already that, or the coral's sources give no growth light (Ek stays as measured). */
+ *  acclimation is already that (including an extent of 0), or the coral's sources give no growth light (Ek stays as measured). */
 function firstCoral(coral: Coral): Coral | null {
-  return coral.ekEmax && (coral.acclimate === "time" || coral.acclimate === "shade") ? { ...coral, acclimate: "site" } : null;
+  return coral.ekEmax && (coral.acclimate === "time" || coral.acclimate === "shade") && (coral.extent ?? 1) > 0 ? { ...coral, acclimate: "site" } : null;
 }
 
 // The full-resolution cloth run is kept (in the worker) until the shade-rating comparison has been made from it.
@@ -210,7 +210,7 @@ export function compute(inp: Inputs, data: Data, level: "preview" | "full" | "ro
   if (inp.height > 1.5) warnings.push("For structures more than 1.5 m above the corals the fast light engine can over-predict light in the shade by up to 4 % of open-water light. Check important designs with the Python package's Monte Carlo.");
   const st = opticalState(water, data.tables);
   const pts = targetGrid(inp.target, spacing);
-  const presetCoral = coralFromPreset(data.presets, inp.coral.preset, inp.coral.acclimate);
+  const presetCoral = coralFromPreset(data.presets, inp.coral.preset, inp.coral.acclimate, Math.min(1, Math.max(0, inp.coral.extent ?? 1)));
   const coral: Coral = { ...presetCoral, ek: inp.coral.ek ?? presetCoral.ek,
     rOverPg: inp.coral.rOverPg !== undefined ? inp.coral.rOverPg : presetCoral.rOverPg ?? null };
   const wind = inp.wind ?? undefined;

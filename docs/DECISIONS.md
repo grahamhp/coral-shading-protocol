@@ -289,7 +289,8 @@ valid data, and a full-size place on reef-scuba.org. You also asked whether the 
 63. **Ten example reefs with PVGIS typical years** travel with the app (5.4 MB in all), so it works offline at a
     conference table: Sipaway, Florida Keys, Belize, Bonaire, Eilat, Mombasa, Maldives, Lizard Island, Kāneʻohe
     Bay, Moorea. Their dates are examples in the local warm season, not advice.
-64. **Coral numbers: "first days" beside "once adjusted".** **[needs you]** With the v5.1 default (Ek follows the
+64. **Coral numbers: "first days" beside "once adjusted".** Settled on 22 Nov 2026 by item 69: both are shown, and
+    "once adjusted" now uses a low extent of adjustment by default. With the v5.1 default (Ek follows the
     shade within about a week, Pmax and respiration fixed) an adjusted coral photosynthesizes almost as much under
     90 % shade as unshaded (P:R 1.15 against 1.12), so the adjusted numbers could not rank shade levels. The app
     now also shows the corals as they are when the shade goes up (Ek as in open water at this depth): under the
@@ -303,10 +304,30 @@ valid data, and a full-size place on reef-scuba.org. You also asked whether the 
     Tagliafico et al. 2022) were checked on the publishers' pages. The app states that it does not predict
     bleaching.
 66. **Default cloth stays 80 %** (no evidence-based reason to move it; the ratings table shows the alternatives).
+    Superseded on 22 Nov 2026 by item 70.
 67. **Interface.** Simple mode asks five questions in plain words; Expert adds every variable, the coral response,
     month by month, other conditions and other canopy widths. Series colors were checked for color-blind separation
     and contrast (canopy amber darkened to #cf7f10). Charts show values under the pointer. When embedded, the app
     reports its height to the host page so the frame has no scrollbar of its own.
 68. **Python.** `design(light="era5")` and `--light era5` use the same Open-Meteo request and typical-year method
     as the app; `surface.typical_year` and `surface.parse_open_meteo` are covered by shared golden values.
-
+69. **Corals adjust only a little to the shade by default** (your decision, 22 Nov 2026: start low, to err on the
+    side of caution about how much shade to apply and how well corals adjust; the user can change it). Implemented
+    as an extent of adjustment between 0 and 1: the Ek the corals move to is Ek at this depth + extent × (Ek matched
+    to the shade − Ek at this depth). The app offers None (0), **Low (0.25, the start)**, Medium (0.5) and Full (1),
+    and any value in Expert mode; Python `design(acclimation_extent=0.25)`, CLI `--acclimation-extent`. Full is the
+    v5.1 behavior. The value 0.25 for "Low" is my choice of a round, clearly low number, not a measured one; the app
+    and the methods say so. Change `EXTENT_DEFAULT` (app.ts) and the two Python defaults if you want another value.
+    The reference values of v5.1 are unchanged (extent 1); a new shared case covers extent 0.25.
+70. **Starting point: a 50 % shade cloth and corals at 5 m** (your decision, 22 Nov 2026), in the app, `design()`
+    and the command line. For a canopy designed on its own the starting target is now 50 % less light (was 75 %),
+    to match; this one is my addition, say if you want 75 % back. The Sipaway examples in the READMEs and the
+    tests name 10 m and 80 % explicitly, so they still describe the real deployment.
+71. **What the new start shows** (Sipaway, 28 Apr to 8 Aug, typical coral): light at the corals 52 % of unshaded
+    (likely 51 to 58 %), daily light 12.1 against 23.2 mol m⁻² d⁻¹; cloth 2.68 × 1.71 m, matched canopy
+    0.65 × 1.35 m. Energy balance (P:R): 0.80 in the first days and 0.87 once adjusted under the cloth, 0.74 and
+    0.78 under the canopy, 1.07 unshaded (with Full adjustment: 1.15 and 0.98). Two checks therefore show on the
+    opening screen: the energy balance is below 1, and the matched canopy is narrower than the coral area. Both
+    follow from the settings and are stated as they are.
+72. **Runs without a background worker** where a window refuses one (22 Nov 2026, after the app stayed on
+    "Computing..." in a sandboxed preview). Same stages, same values.

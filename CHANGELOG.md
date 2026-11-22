@@ -27,6 +27,14 @@ Made ready to show at Reef Futures 2026. Includes everything in 5.1.0 below.
 - **How much shade?** The same cloth at 30, 50, 70, 80 and 90 %: light, daily light, photosynthesis, energy
   balance and time above saturation, with the published trials named. Choosing a row uses that rating.
 - **Coral numbers for the first days** (before the corals adjust to the shade) beside the adjusted ones.
+- **How far the corals adjust to the shade is a setting**, and it starts low. None, Low (25 % of the way, the
+  start), Medium, Full; any value in Expert mode. Full is what 5.1 assumed. Low is a cautious assumption, not a
+  measurement, so that a plan does not rely on the corals making up for heavy shade. Python:
+  `design(acclimation_extent=0.25)`; CLI `--acclimation-extent`.
+- **New starting point: a 50 % shade cloth and corals at 5 m** (was 80 % and 10 m), in the app, `design()` and the
+  command line. A canopy designed on its own starts at 50 % less light (was 75 %). **This changes the output of
+  `design()` and the command line when depth, rating or acclimation are left out**; name them to reproduce
+  earlier results (`depth=10, cloth_rating=80, acclimation_extent=1`).
 - **Through the day**: average day, clearest day, cloudiest day or any date; values under the pointer.
 - New check when the ERA5 route is used inside PVGIS's satellite area; exports add photosynthesis and P:R per day
   and the sun-beam share.

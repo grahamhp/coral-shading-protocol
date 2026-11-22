@@ -100,7 +100,8 @@ class DesignResult:
             if s.contrast is not None:
                 lines.append(f"    light at noon {100 * s.contrast['noon']:.0f} % and in the morning and afternoon "
                              f"{100 * s.contrast['side']:.0f} % of open water")
-            lines.append(f"    coral ({i['coral']}, adjusted to {i['acclimate']}): Ek {b['ek']:.0f}; photosynthesis "
+            ext = "" if i.get("acclimation_extent") is None else f", {100 * i['acclimation_extent']:.0f} % of the way"
+            lines.append(f"    coral ({i['coral']}, adjusted to {i['acclimate']}{ext}): Ek {b['ek']:.0f}; photosynthesis "
                          f"{100 * b['gross_vs_open']:.0f} % of unshaded; {b['hours_above_ek']:.1f} h above Ek per day{pr}")
             if s.solve is not None and not s.solve.feasible:
                 lines.append("    " + s.solve.message)
@@ -232,13 +233,13 @@ def _mc_job(j: dict, depth: float, a: float, b: float, n_paths: int) -> dict:
 
 
 def design(lat: float, lon: float, tz: float | None = None, start=(2025, 4, 28), end=(2025, 8, 8), target="reef_star",
-           depth: float = 10.0, height: float = 0.75, kd: float = 0.10, w0: float = 0.7, w0_range: tuple = (0.5, 0.9),
+           depth: float = 5.0, height: float = 0.75, kd: float = 0.10, w0: float = 0.7, w0_range: tuple = (0.5, 0.9),
            scenario: str = "both", sync: bool = True,
-           cloth_rating: float = 80.0, tau_clean: float | None = None, tau_fouled: float | None = None, fouled_share: float = 0.0,
-           cloth_size: tuple | None = None, dynamic_reduction: float = 75.0, canopy: dict | None = None, coral: str = "typical",
+           cloth_rating: float = 50.0, tau_clean: float | None = None, tau_fouled: float | None = None, fouled_share: float = 0.0,
+           cloth_size: tuple | None = None, dynamic_reduction: float = 50.0, canopy: dict | None = None, coral: str = "typical",
            acclimate: str = "time", light="tmy", spacing: float = 0.05, noon_shift: float = 0.0, wind: float | None = None,
            robustness: bool = True, n_facets: int = 16, kd_series: dict | None = None, tide: "conditions.Tide | None" = None,
-           fouling: "conditions.Fouling | None" = None) -> DesignResult:
+           fouling: "conditions.Fouling | None" = None, acclimation_extent: float = 0.25) -> DesignResult:
     """Design a shade cloth and/or canopy for a coral area (see the browser app's help for every input).
     light: "tmy" (download a PVGIS typical year), "era5" (download ten years of ERA5 hours from Open-Meteo and build a
     typical year; any site, as the app does), "example" (the bundled example site), "clearsky" (cloud-free model
@@ -246,7 +247,11 @@ def design(lat: float, lon: float, tz: float | None = None, start=(2025, 4, 28),
     surface.HourlyLight. Light data for a point more than surface.MATCH_KM from the site are refused.
     w0: water scattering used for the design; w0_range: the range shown with every result (default 0.5-0.9, the span of
     published values for coastal and reef waters; narrow it with a field reading, scenarios.w0_from_reading).
-    kd_series {(y, m, d): Kd}, tide (conditions.Tide) and fouling (conditions.Fouling) are optional (v5.1)."""
+    kd_series {(y, m, d): Kd}, tide (conditions.Tide) and fouling (conditions.Fouling) are optional (v5.1).
+    acclimation_extent: how far the corals adjust to the shade, 0-1 (see pe; default 0.25, a cautious assumption; 1 is
+    the full adjustment of v5.1). The starting values (50 % cloth, 5 m) are the app's and are not advice for a site."""
+    if not 0.0 <= acclimation_extent <= 1.0:
+        raise ValueError("acclimation_extent must be between 0 and 1.")
     tz = surface.utc_offset_from_lon(lon) if tz is None else tz
     if isinstance(light, surface.HourlyLight):
         h, label = light, light.database or "user data"
@@ -279,10 +284,11 @@ def design(lat: float, lon: float, tz: float | None = None, start=(2025, 4, 28),
         site.tide_ref = sc.tide_reference(site, tuple(start), tuple(end))
     water = engine.Water(kd=kd, w0=w0, depth=depth)
     days = sc.deployment_days(tuple(start), tuple(end))
-    cor = pe.Coral.preset(coral, acclimate=acclimate)
+    cor = pe.Coral.preset(coral, acclimate=acclimate, extent=acclimation_extent)
     res = DesignResult(inputs=dict(lat=lat, lon=lon, tz=tz, start=tuple(start), end=tuple(end), depth=depth, height=height, kd=kd, w0=w0,
                                    w0_range=w0_range, scenario=scenario, coral=coral,
-                                   acclimate=(acclimate if cor.ek_emax else "none (no growth light in the source)"), light=label,
+                                   acclimate=(acclimate if cor.ek_emax else "none (no growth light in the source)"),
+                                   acclimation_extent=(acclimation_extent if cor.ek_emax and acclimate in ("time", "shade") else None), light=label,
                                    kd_series=kd_series is not None, tide=tide is not None, fouling=fouling is not None),
                        site=site, water=water, target=tgt)
     X, Y = tgt.grid(spacing)

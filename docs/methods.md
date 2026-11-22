@@ -224,9 +224,20 @@ over the deployment ÷ open-water daily light summed.
   coral depth (the corals as they are when the shade goes up), and *once adjusted*, with the chosen acclimation.
   Reason: with Ek proportional to the light and Pmax and R held fixed, an adjusted coral recovers its daily
   photosynthesis almost fully under any shade, so the adjusted P:R says little about how much shade is too much.
-  The first-days values are the immediate effect of the shade; the adjusted values are on the optimistic side,
-  because real corals in low light also change Pmax and respiration (Porter et al. 1984). The shade-rating table
-  uses the first-days values. *(ui/compute.ts: bioFirst; in Python: pe.Coral(acclimate="site"))*
+  The first-days values are the immediate effect of the shade; the fully adjusted values are on the optimistic
+  side, because real corals in low light also change Pmax and respiration (Porter et al. 1984). The shade-rating
+  table uses the first-days values. *(ui/compute.ts: bioFirst; in Python: pe.Coral(acclimate="site"))*
+- **How far the corals adjust (v5.2).** An extent x between 0 and 1 sets the Ek the corals move to:
+  Ek_site + x (Ek matched to the shade − Ek_site), where Ek_site is the Ek for open water at the coral depth.
+  x = 1 is the full adjustment described under Photoacclimation below, x = 0 leaves the corals as they are at
+  this depth, and the time course (2.5-day time constant) is the same for any x. The app and `design()` start at
+  **x = 0.25 ("Low")**. This is a cautious design assumption chosen by the authors, not a measured value: the
+  full adjustment was measured in the laboratory at ordinary temperatures, the tool has no measurement of how far
+  corals adjust during heat stress, and a low extent keeps a plan from relying on the corals making up for heavy
+  shade. The app offers None, Low (0.25), Medium (0.5) and Full (1), and any value in Expert mode.
+  *(pe.Coral.extent; design(acclimation_extent=...); CLI --acclimation-extent)*
+- **Starting values.** The app, `design()` and the command line start from a 50 % shade cloth and corals at 5 m
+  (before 5.2: 80 % and 10 m, the Sipaway deployment). They are a place to start, not advice for a site.
 - **Photosynthesis.** P_gross = Pmax tanh(E / Ek) (Jassby & Platt 1976; Chalker 1981). Daily gross
   photosynthesis in Pmax-hours = ∫ tanh(E/Ek) dt; "photosynthesis, % of unshaded" = that ÷ the same for
   open water at the same depth. Hours above Ek; light above Ek = ∫ max(E − Ek, 0) dt. Daily P:R =

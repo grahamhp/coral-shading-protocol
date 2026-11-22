@@ -1,11 +1,12 @@
 """High-level API and command line (fast settings; no network)."""
 import numpy as np
+import pytest
 
-from coralshading import SHARED, cli, design, pvgis
+from coralshading import SHARED, cli, design, pe, pvgis
 
 
 def _short():
-    return design.design(10.4675, 123.4506, 8, (2025, 4, 28), (2025, 5, 3), light="example", spacing=0.2, robustness=False)
+    return design.design(10.4675, 123.4506, 8, (2025, 4, 28), (2025, 5, 3), light="example", spacing=0.2, robustness=False, depth=10, cloth_rating=80, acclimation_extent=1.0)
 
 
 def test_design_sync_and_summary():
@@ -32,7 +33,7 @@ def test_contrast_and_beam_share():
     r = _short()
     d = r.get("dynamic")
     assert 0.0 < r.beam_share < 1.0
-    hi = design.design(10.4675, 123.4506, 8, (2025, 4, 28), (2025, 4, 30), light="example", spacing=0.2, robustness=False, w0=0.9, kd=0.21)
+    hi = design.design(10.4675, 123.4506, 8, (2025, 4, 28), (2025, 4, 30), light="example", spacing=0.2, robustness=False, w0=0.9, kd=0.21, depth=10, cloth_rating=80, acclimation_extent=1.0)
     assert hi.beam_share < 0.02 < r.beam_share                     # strong scattering in turbid water: almost no sun beam at 10 m
     lo, up = d.w0_range_T
     assert lo < d.transmission < up                                # w0 0.7 lies inside the 0.5-0.9 range
@@ -77,3 +78,20 @@ def test_light_far_from_site_is_refused_and_warnings():
     w = d.light_warnings(cs, 16.1883, -88.5992, 8, (2025, 6, 1), 0.0)
     assert len(w) == 2 and w[0].startswith("Light data: clear-sky") and "UTC-6 fits" in w[1]
     assert d.light_warnings(cs, 16.1883, -88.5992, -6, (2025, 6, 1), 0.2)[1].startswith("20 % of the light")
+
+
+def test_partial_acclimation():
+    """extent: 1 is the full adjustment of v5.1, 0 equals "site", and values between lie between (also for "shade")."""
+    rng = np.random.default_rng(3)
+    ed = rng.uniform(20.0, 300.0, (6, 24, 5)); eo = ed.max(axis=2) * 2.5
+    ek = lambda mode, x: pe.effective_ek(pe.Coral.preset("typical", acclimate=mode, extent=x), ed, eo)
+    site = ek("site", 1.0)
+    assert np.array_equal(ek("time", 0.0), np.broadcast_to(site, (6, 5))) and np.array_equal(ek("shade", 0.0), site)
+    full, part = ek("time", 1.0), ek("time", 0.25)
+    assert np.array_equal(part[0], full[0]) and np.all(part[1:] > full[1:]) and np.all(part[1:] < site)
+    assert np.allclose(site - part, 0.25 * (site - full))             # the path scales with the extent
+    assert np.allclose(ek("shade", 0.25), site + 0.25 * (ek("shade", 1.0) - site))
+    with pytest.raises(ValueError):
+        ek("time", 1.5)
+    with pytest.raises(ValueError):
+        design.design(10.4675, 123.4506, light="example", acclimation_extent=-0.1)

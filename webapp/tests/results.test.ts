@@ -72,3 +72,25 @@ test("the calculation stages give the same plan with or without a background wor
   }
   assert.equal(lastR!.clothOptions!.length, 5);
 });
+
+test("how far the corals adjust: none equals the first days, and more adjustment gives more photosynthesis under the shade", () => {
+  const run = (extent: number) => compute({ ...base, coral: { ...base.coral, extent } }, data, "preview");
+  const r0 = run(0), r25 = run(0.25), r100 = run(1), rDef = compute(base, data, "preview");
+  const C = (r: ReturnType<typeof compute>) => r.scenarios[0]!;
+  // the light and the structure do not depend on the coral
+  assert.equal(C(r25).T, C(r100).T); assert.equal(C(r25).panel.lx, C(r100).panel.lx);
+  // an absent extent means full adjustment (plans saved before v5.2)
+  assert.equal(C(rDef).bio.prDaily, C(r100).bio.prDaily);
+  // no adjustment: one set of coral values, equal to the first-days values of the other runs
+  assert.equal(C(r0).bioFirst, null);
+  assert.ok(Math.abs(C(r0).bio.prDaily! - C(r25).bioFirst!.prDaily!) < 1e-12);
+  assert.ok(Math.abs(C(r25).bioFirst!.prDaily! - C(r100).bioFirst!.prDaily!) < 1e-12);
+  // more adjustment, more photosynthesis under the shade
+  assert.ok(C(r0).bio.prDaily! < C(r25).bio.prDaily! && C(r25).bio.prDaily! < C(r100).bio.prDaily!);
+  assert.ok(C(r0).bio.grossVsOpen! < C(r25).bio.grossVsOpen! && C(r25).bio.grossVsOpen! < C(r100).bio.grossVsOpen!);
+  // the page says how far
+  const st = { ...base, coral: { ...base.coral, extent: 0.25 } };
+  const html = resultsHtml(ctx(st, r25, false));
+  assert.ok(/25\s% of the way to the shade/.test(html) && !/NaN|undefined|\[object/.test(html));   // the page keeps number and % together
+  assert.ok(!resultsHtml(ctx({ ...base, coral: { ...base.coral, extent: 0 } }, r0, false)).includes("first days"));
+});

@@ -29,6 +29,12 @@ compiled curves of Sawall & Hochberg 2018 have Ek/Emax 0.14-0.52). Modes:
            within 7.5 days. Day k uses the Ek reached after the light of days 0..k-1.
 The peak is the 90th percentile of daily peaks when several days are given ("site", "shade"). Presets without Ek/Emax
 use "none".
+
+How far the corals adjust (v5.2): extent, 0 to 1. In "time" and "shade" the Ek the corals move to is
+    Ek_site + extent x (Ek matched to the shade - Ek_site),
+so 1 is full adjustment (the modes as described above), 0 leaves the corals as in "site", and values between are a
+partial adjustment. The published observations are of full adjustment in corals that were not heat-stressed; a low
+extent is a cautious design assumption, not a measured value.
 """
 from __future__ import annotations
 
@@ -51,14 +57,16 @@ class Coral:
     ek: float                          # umol photons m-2 s-1
     r_over_pg: float | None = None     # dark respiration / Pmax (gross)
     ek_emax: float | None = None       # Ek / peak irradiance of the source colonies (for photoacclimation)
-    acclimate: str = "none"            # "none" | "site" | "shade"
+    acclimate: str = "none"            # "none" | "site" | "shade" | "time"
     label: str = "custom"
+    extent: float = 1.0                # how far Ek moves from "site" to the shade in "time" and "shade" (0-1)
 
     @classmethod
-    def preset(cls, pid: str, acclimate: str = "none", presets: dict | None = None) -> "Coral":
+    def preset(cls, pid: str, acclimate: str = "none", presets: dict | None = None, extent: float = 1.0) -> "Coral":
         P = presets or load_presets()
         p = next(x for x in P["presets"] if x["id"] == pid)
-        return cls(ek=float(p["Ek"]), r_over_pg=p.get("R_over_Pg"), ek_emax=p.get("Ek_Emax"), acclimate=acclimate, label=p["label"])
+        return cls(ek=float(p["Ek"]), r_over_pg=p.get("R_over_Pg"), ek_emax=p.get("Ek_Emax"), acclimate=acclimate, label=p["label"],
+                   extent=extent)
 
 
 def _p90_peak(days3: np.ndarray) -> np.ndarray:
@@ -76,24 +84,31 @@ def effective_ek(coral: Coral, ed_days: np.ndarray, ed_open_days: np.ndarray | N
     e = ed_days if ed_days.ndim == 3 else ed_days[None]
     npnt = e.shape[2]
     mode = coral.acclimate if coral.ek_emax else "none"
-    if mode == "time":
+    x = float(coral.extent)
+    if not 0.0 <= x <= 1.0:
+        raise ValueError("the extent of acclimation must be between 0 and 1")
+    site = None
+    if mode == "site" or mode == "time" or (mode == "shade" and x < 1.0):
         if ed_open_days is None:
-            raise ValueError("acclimation over time needs the open-water light")
+            raise ValueError("acclimation over time needs the open-water light" if mode == "time" else "site acclimation needs the open-water light")
         o = np.asarray(ed_open_days, float); o = o if o.ndim == 2 else o[None]
-        cur = np.full(npnt, max(coral.ek_emax * float(_p90_peak(o[:, :, None])[0]), 1.0))
+        site = max(coral.ek_emax * float(_p90_peak(o[:, :, None])[0]), 1.0)
+    if mode == "time":
+        cur = np.full(npnt, site)
         f = 1.0 - math.exp(-1.0 / ACCLIMATION_DAYS)
         out = np.empty((e.shape[0], npnt))
         for k in range(e.shape[0]):
             out[k] = cur
-            cur = cur + f * (np.maximum(coral.ek_emax * e[k].max(axis=0), 1.0) - cur)
+            tgt = np.maximum(coral.ek_emax * e[k].max(axis=0), 1.0)
+            if x < 1.0:
+                tgt = site + x * (tgt - site)
+            cur = cur + f * (tgt - cur)
         return out
     if mode == "shade":
-        return np.maximum(coral.ek_emax * _p90_peak(e), 1.0)
+        full = np.maximum(coral.ek_emax * _p90_peak(e), 1.0)
+        return full if x >= 1.0 else site + x * (full - site)
     if mode == "site":
-        if ed_open_days is None:
-            raise ValueError("site acclimation needs the open-water light")
-        o = np.asarray(ed_open_days, float); o = o if o.ndim == 2 else o[None]
-        return np.full(npnt, max(coral.ek_emax * float(_p90_peak(o[:, :, None])[0]), 1.0))
+        return np.full(npnt, site)
     return np.full(npnt, coral.ek)
 
 

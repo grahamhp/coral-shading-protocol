@@ -47,14 +47,19 @@ interface UI { mode: "simple" | "expert"; targetKey: string; kdKey: string; ligh
   reading: { pct: number; err: number; lx: number; ly: number; h: number; date: string; time: string; diffuse: number } }
 
 const EXAMPLES = CSP_BOOT.examples;
+// How far the corals adjust to the shade (share of the way from the Ek at this depth to the Ek matched to the shade).
+// Low is the starting value: a cautious assumption, so the plan does not lean on the corals adjusting.
+const EXTENTS: [string, string][] = [["0", "None"], ["0.25", "Low"], ["0.5", "Medium"], ["1", "Full"]];
+const EXTENT_DEFAULT = 0.25;
 const ex = EXAMPLES[0]!;
 const exLabel = (e: Example) => `${e.light.database}, bundled with the app`;
 const state: Inputs = {
   site: { name: ex.name, lat: ex.lat, lon: ex.lon, tz: ex.utc_offset_h },
   start: parseDate(ex.deployment.start), end: parseDate(ex.deployment.end),
-  target: { shape: "circle", lx: 1.1, ly: 1.1 }, depth: 10, height: 0.75, water: { kd: 0.10, w0: W0_DEFAULT, w0Lo: W0_RANGE[0], w0Hi: W0_RANGE[1] },
-  scenario: "both", sync: true, clothRating: 80, dynamicTargetReduction: 75, clothSize: null, canopy: null,
-  noonShift: 0, wind: null, coral: { preset: "typical", acclimate: "time" }, gridSpacing: 0.05,
+  // starting point (Graham, 22 Nov 2026): a 50 % cloth at 5 m, and corals that adjust only a little to the shade
+  target: { shape: "circle", lx: 1.1, ly: 1.1 }, depth: 5, height: 0.75, water: { kd: 0.10, w0: W0_DEFAULT, w0Lo: W0_RANGE[0], w0Hi: W0_RANGE[1] },
+  scenario: "both", sync: true, clothRating: 50, dynamicTargetReduction: 50, clothSize: null, canopy: null,
+  noonShift: 0, wind: null, coral: { preset: "typical", acclimate: "time", extent: EXTENT_DEFAULT }, gridSpacing: 0.05,
   fouling: null, kdSeriesText: null, tideText: null,
 };
 const ui: UI = { mode: "simple", targetKey: "reef_star", kdKey: "moderate", lightLabel: exLabel(ex), lightKind: "tmy",
@@ -243,6 +248,13 @@ const tog = (name: string, opts: [string, string][], v: string) => `<span class=
 
 const W0B = w0Bounds(CSP_BOOT.tables);
 
+function adjustNote(): string {
+  const x = state.coral.extent ?? 1, p = Math.round(100 * x);
+  return x <= 0 ? "The corals keep the light response they have at this depth for the whole deployment."
+    : x >= 1 ? "The corals adjust fully to the light under the shade within about a week, as measured in a laboratory study."
+    : `The corals move ${p} % of the way toward a light response matched to the shade.${x <= EXTENT_DEFAULT ? " A cautious starting value." : ""}`;
+}
+
 function renderLeft() {
   const P = CSP_BOOT.presets.presets;
   const E = ui.mode === "expert";
@@ -326,8 +338,12 @@ function renderLeft() {
   <section class="card step"><h3><i>5</i>Which coral? ${info("coral")}</h3>
     <div class="field"><label for="coral">Coral type</label>${sel("coral", P.map((p: any) => [p.id, p.label + (p.status === "caution" ? " (use with care)" : "")]), state.coral.preset)}</div>
     ${P.find((p: any) => p.id === state.coral.preset)?.Ek_Emax
-      ? `<div class="field"><label>Corals adjusted to ${info("acclimation")}</label>${sel("accl", [["time", "Over time (from this depth to the shade)"], ["site", "Light at this depth"], ["shade", "The shade"], ["none", "As measured"]], state.coral.acclimate)}</div>`
-      : `<div class="field"><label>Corals adjusted to ${info("acclimation")}</label><span class="val">As measured</span></div><p class="sub">The source gives no growth light for this coral, so its measured Ek is used.</p>`}
+      ? `${state.coral.acclimate === "none" ? `<div class="field"><label>Adjustment to the shade ${info("acclimation")}</label><span class="val">Not modeled</span></div>`
+          : `<div class="field stack"><label>Adjustment to the shade ${info("acclimation")}</label>${tog("adjust", EXTENTS, String(state.coral.extent ?? 1))}</div>
+        <p class="sub" id="adjust-note">${adjustNote()}</p>`}
+        ${E ? `${state.coral.acclimate !== "none" ? `<div class="field"><label>Share of the way</label>${num("extent", Math.round(100 * (state.coral.extent ?? 1)), 5, "%", 0, 100)}</div>` : ""}
+        <div class="field"><label>Timing</label>${sel("accl", [["time", "Over days, starting from the light at this depth"], ["shade", "Already adjusted when the shade goes up"], ["none", "Not modeled: Ek as measured"]], state.coral.acclimate === "site" ? "time" : state.coral.acclimate)}</div>` : ""}`
+      : `<div class="field"><label>Adjustment to the shade ${info("acclimation")}</label><span class="val">Not modeled</span></div><p class="sub">The source gives no growth light for this coral, so its measured Ek is used.</p>`}
     ${E ? `<div class="field"><label>Ek (as measured)</label>${num("ek", state.coral.ek ?? P.find((p: any) => p.id === state.coral.preset)!.Ek, 1, "µmol m⁻² s⁻¹", 5, 2000)}</div>
     <div class="field"><label>Respiration ÷ Pmax</label>${num("rpg", state.coral.rOverPg ?? P.find((p: any) => p.id === state.coral.preset)!.R_over_Pg ?? 0, 0.01, "", 0, 0.99)}</div>
     <div class="field"><label>Grid spacing ${info("grid")}</label>${sel("grid", [["0.025", "2.5 cm"], ["0.05", "5 cm"], ["0.1", "10 cm"]], String(state.gridSpacing))}</div>` : ""}
@@ -479,8 +495,11 @@ function onInput(e: Event) {
         cx: parseFloat(($("#pcx") as HTMLInputElement).value), cy: parseFloat(($("#pcy") as HTMLInputElement).value), rot: parseFloat(($("#prot") as HTMLInputElement).value) }; break;
     case "noonShift": if (Number.isFinite(v)) state.noonShift = v; break;
     case "wind": if (v >= 0) state.wind = v; break;
-    case "coral": state.coral = { preset: el.value, acclimate: state.coral.acclimate }; renderLeft(); break;
-    case "accl": state.coral.acclimate = el.value as Inputs["coral"]["acclimate"]; break;
+    case "coral": state.coral = { preset: el.value, acclimate: state.coral.acclimate, extent: state.coral.extent }; renderLeft(); break;
+    case "accl": state.coral.acclimate = el.value as Inputs["coral"]["acclimate"]; renderLeft(); break;
+    case "extent": if (v >= 0 && v <= 100) { state.coral.extent = v / 100;
+      document.querySelectorAll('[data-tog="adjust"] button').forEach((b) => b.classList.toggle("on", Number((b as HTMLElement).dataset.v) === state.coral.extent));
+      const n = document.getElementById("adjust-note"); if (n) n.textContent = adjustNote(); } break;
     case "ek": if (v > 0) state.coral.ek = v; break;
     case "rpg": if (v >= 0 && v < 1) state.coral.rOverPg = v; break;
     case "grid": state.gridSpacing = v; break;
@@ -493,6 +512,7 @@ function onToggle(name: string, v: string) {
   switch (name) {
     case "scenario": state.scenario = v as Inputs["scenario"]; break;
     case "sync": state.sync = v === "yes"; break;
+    case "adjust": state.coral.extent = Number(v); if (state.coral.acclimate === "site") state.coral.acclimate = "time"; break;
     case "noonMode": ui.noonMode = v as UI["noonMode"]; if (v === "computed") state.noonShift = 0; break;
     case "windMode": ui.windMode = v as UI["windMode"]; state.wind = v === "set" ? (state.wind ?? 5) : null; break;
     case "clothAuto": ui.clothAuto = v === "auto"; state.clothSize = ui.clothAuto ? null : { lx: last?.scenarios.find((s) => s.kind === "constant")?.panel.lx ?? 3, ly: last?.scenarios.find((s) => s.kind === "constant")?.panel.ly ?? 2 }; break;

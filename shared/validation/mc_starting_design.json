@@ -1,0 +1,172 @@
+{
+ "description": "Fast engine against the 3-D Monte Carlo for the starting design of v5.2 (Sipaway example light, 28 April 2025, flat sea): 50 % cloth 2.68 x 1.71 m and matched opaque canopy 0.65 x 1.35 m, 0.75 m above corals at 5 m, Kd 0.10, w0 0.7. Transmission = light under the structure / open water. 200,000 paths per point. Made with DesignResult.mc_check().",
+ "date": "2026-11-22",
+ "n": 18,
+ "mean_difference": 0.005311439167589225,
+ "min_difference": -0.004626782140571439,
+ "max_difference": 0.013132265066781224,
+ "points": [
+  {
+   "kind": "constant",
+   "hour": -3.0,
+   "point": "center",
+   "mc": 0.5097623442251873,
+   "se": 0.0021663480933838113,
+   "fast": 0.5166286666746092,
+   "difference": 0.006866322449421869
+  },
+  {
+   "kind": "constant",
+   "hour": -3.0,
+   "point": "east edge",
+   "mc": 0.5175366803284673,
+   "se": 0.002212404187633962,
+   "fast": 0.5250205338408913,
+   "difference": 0.007483853512423977
+  },
+  {
+   "kind": "constant",
+   "hour": -3.0,
+   "point": "west edge",
+   "mc": 0.5106181784643111,
+   "se": 0.002190647940580121,
+   "fast": 0.5167711464464791,
+   "difference": 0.006152967982168023
+  },
+  {
+   "kind": "constant",
+   "hour": 0.0,
+   "point": "center",
+   "mc": 0.5078938984184808,
+   "se": 0.0019640033186983106,
+   "fast": 0.5125085074836657,
+   "difference": 0.00461460906518496
+  },
+  {
+   "kind": "constant",
+   "hour": 0.0,
+   "point": "east edge",
+   "mc": 0.5094937248449672,
+   "se": 0.001973582263938468,
+   "fast": 0.5143555160053921,
+   "difference": 0.004861791160424844
+  },
+  {
+   "kind": "constant",
+   "hour": 0.0,
+   "point": "west edge",
+   "mc": 0.5092053541298672,
+   "se": 0.0019592173959553927,
+   "fast": 0.5143555160053921,
+   "difference": 0.005150161875524861
+  },
+  {
+   "kind": "constant",
+   "hour": 3.0,
+   "point": "center",
+   "mc": 0.5125868485111553,
+   "se": 0.0021380664126131434,
+   "fast": 0.516630237728966,
+   "difference": 0.004043389217810667
+  },
+  {
+   "kind": "constant",
+   "hour": 3.0,
+   "point": "east edge",
+   "mc": 0.5128095281216195,
+   "se": 0.002141502555503665,
+   "fast": 0.5167735947461156,
+   "difference": 0.00396406662449611
+  },
+  {
+   "kind": "constant",
+   "hour": 3.0,
+   "point": "west edge",
+   "mc": 0.5203829767205941,
+   "se": 0.002196210500718508,
+   "fast": 0.5250164126531328,
+   "difference": 0.004633435932538732
+  },
+  {
+   "kind": "dynamic",
+   "hour": -3.0,
+   "point": "center",
+   "mc": 0.7632861098352587,
+   "se": 0.004187206667685911,
+   "fast": 0.7586593276946872,
+   "difference": -0.004626782140571439
+  },
+  {
+   "kind": "dynamic",
+   "hour": -3.0,
+   "point": "east edge",
+   "mc": 0.901621186716601,
+   "se": 0.004287101998619924,
+   "fast": 0.9119099718185455,
+   "difference": 0.010288785101944531
+  },
+  {
+   "kind": "dynamic",
+   "hour": -3.0,
+   "point": "west edge",
+   "mc": 0.2728876002421091,
+   "se": 0.0011961962517692084,
+   "fast": 0.28601986530889034,
+   "difference": 0.013132265066781224
+  },
+  {
+   "kind": "dynamic",
+   "hour": 0.0,
+   "point": "center",
+   "mc": 0.16015817764238788,
+   "se": 0.0007521311937868404,
+   "fast": 0.16822908083447718,
+   "difference": 0.008070903192089307
+  },
+  {
+   "kind": "dynamic",
+   "hour": 0.0,
+   "point": "east edge",
+   "mc": 0.8852391851250847,
+   "se": 0.0038848152015983468,
+   "fast": 0.8866630571723864,
+   "difference": 0.0014238720473016553
+  },
+  {
+   "kind": "dynamic",
+   "hour": 0.0,
+   "point": "west edge",
+   "mc": 0.8853137989042053,
+   "se": 0.0038892695192674675,
+   "fast": 0.8866630571723864,
+   "difference": 0.0013492582681811083
+  },
+  {
+   "kind": "dynamic",
+   "hour": 3.0,
+   "point": "center",
+   "mc": 0.7616790469085266,
+   "se": 0.003981984812031344,
+   "fast": 0.7585498707256101,
+   "difference": -0.0031291761829165265
+  },
+  {
+   "kind": "dynamic",
+   "hour": 3.0,
+   "point": "east edge",
+   "mc": 0.27484737104133705,
+   "se": 0.001159114933244028,
+   "fast": 0.2860033303668558,
+   "difference": 0.011155959325518772
+  },
+  {
+   "kind": "dynamic",
+   "hour": 3.0,
+   "point": "west edge",
+   "mc": 0.901699540075724,
+   "se": 0.004179469496625544,
+   "fast": 0.9118697625940073,
+   "difference": 0.010170222518283367
+  }
+ ]
+}

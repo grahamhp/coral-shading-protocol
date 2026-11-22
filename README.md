@@ -49,14 +49,14 @@ The app can be embedded in a page: it reports its height to the host (`postMessa
 ```
 pip install ./python
 coralshading design --lat 10.4675 --lon 123.4506 --tz 8 --start 2025-04-28 --end 2025-08-08 \
-    --target reef_star --depth 10 --height 0.75 --kd 0.21 --light tmy --out results/      # or --light era5
+    --target reef_star --depth 10 --height 0.75 --kd 0.21 --rating 80 --light tmy --out results/      # or --light era5
 # options: --w0 0.7 --w0-range 0.5-0.9 | --w0-reading RATIO LX LY HEIGHT --reading-time "2025-05-22 12:00" --reading-err 0.02
-#          --kd-series kd.csv --tide tide.csv --fouling 0.2 0.12 30 21 --acclimate time
+#          --kd-series kd.csv --tide tide.csv --fouling 0.2 0.12 30 21 --acclimate time --acclimation-extent 0.25
 ```
 
 ```python
 from coralshading.design import design
-r = design(lat=10.4675, lon=123.4506, tz=8, start=(2025, 4, 28), end=(2025, 8, 8), kd=0.21)
+r = design(lat=10.4675, lon=123.4506, tz=8, start=(2025, 4, 28), end=(2025, 8, 8), depth=10, kd=0.21, cloth_rating=80)
 print(r.summary())
 r.to_csv("results/")
 r.mc_check()        # check the design with the 3-D Monte Carlo (a few minutes)
